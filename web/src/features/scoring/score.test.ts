@@ -136,7 +136,7 @@ describe('scoreSession', () => {
     expect(r.items[1].input).toBe('바나나')
   })
 
-  it('연속 모드 — 경계 역행에도 안전 (max 클램프)', () => {
+  it('연속 모드 — 경계가 엉망(0)이어도 정합이 복원한다', () => {
     const r = scoreSession({
       mode: 'continuous',
       targets: ['가', '나'],
@@ -146,6 +146,51 @@ describe('scoreSession', () => {
       elapsedMs: 60000,
     })
     expect(r.items.length).toBe(2)
+    expect(r.accuracy).toBe(1) // 경계 스냅샷이 아니라 정합 기반이므로 복원됨
+  })
+
+  it('공인시험 프로필 — 첨가도 감점, 옵션 강제', () => {
+    // custom: 첨가는 정확도 분모에 안 들어감 → 1.0
+    const custom = scoreSession({
+      mode: 'discrete',
+      targets: ['가나'],
+      answers: ['가나다'],
+      options: opts({ profile: 'custom' }),
+      elapsedMs: 60000,
+    })
+    expect(custom.accuracy).toBe(1)
+    // exam: (2 - 첨가1) / 2 = 0.5
+    const exam = scoreSession({
+      mode: 'discrete',
+      targets: ['가나'],
+      answers: ['가나다'],
+      options: opts({ profile: 'exam' }),
+      elapsedMs: 60000,
+    })
+    expect(exam.accuracy).toBe(0.5)
+  })
+
+  it('공인시험 프로필 — 띄어쓰기·문장부호 무시 강제 (개별 옵션 무시)', () => {
+    const r = scoreSession({
+      mode: 'discrete',
+      targets: ['안녕 하세요.'],
+      answers: ['안녕하세요'],
+      options: opts({ profile: 'exam', ignoreSpace: false, ignorePunct: false, unit: 'jamo' }),
+      elapsedMs: 60000,
+    })
+    expect(r.accuracy).toBe(1) // 공백·마침표 차이는 무감점, 단위는 음절 강제
+    expect(r.totalUnits).toBe(5) // "안녕하세요" 음절 5
+  })
+
+  it('공인시험 프로필 — 감점이 글자수를 넘으면 0 (음수 방지)', () => {
+    const r = scoreSession({
+      mode: 'discrete',
+      targets: ['가'],
+      answers: ['나다라마바'],
+      options: opts({ profile: 'exam' }),
+      elapsedMs: 60000,
+    })
+    expect(r.accuracy).toBe(0)
   })
 
   it('KPM — 60초에 "한글" 이면 6타/분', () => {

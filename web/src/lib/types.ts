@@ -20,6 +20,12 @@ export interface ScoringOptions {
   ignorePunct: boolean
   unit: ScoringUnit
   inputStyle: 'continuous' | 'discrete'
+  /**
+   * exam = 속기 공인시험 기준: 음절 단위 감점, 띄어쓰기·문장부호 무시 강제,
+   * 첨가(삽입)도 감점 — 정확률 = (원문 글자수 − 오자·탈자·첨가) / 원문 글자수.
+   * 생략 시 custom.
+   */
+  profile?: 'custom' | 'exam'
 }
 
 export interface Settings {
@@ -30,6 +36,8 @@ export interface Settings {
   autoPerCharMs: number
   autoMinMs: number
   autoMaxMs: number
+  /** 자동 노출시간 배속 (0.5=여유 ~ 2.0=빡세게). 시간 = 공식값 ÷ 배속 */
+  autoSpeed: number
   blankMs: number
   order: 'seq' | 'shuffle'
   repeat: number // 1~99
@@ -44,6 +52,8 @@ export interface Settings {
   flashScale: number
   /** 입력창(타이핑·자유연습) 글자 크기 px */
   inputFontPx: number
+  /** 연습 중 실시간 정확도·타수 표시 (실전처럼 가리려면 끔) */
+  liveStats: boolean
   scoring: ScoringOptions
   syncToken: string
 }
@@ -56,6 +66,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoPerCharMs: 180,
   autoMinMs: 1000,
   autoMaxMs: 8000,
+  autoSpeed: 1,
   blankMs: 150,
   order: 'seq',
   repeat: 1,
@@ -68,7 +79,8 @@ export const DEFAULT_SETTINGS: Settings = {
   diagnostics: false,
   flashScale: 1,
   inputFontPx: 26,
-  scoring: { ignoreSpace: true, ignorePunct: false, unit: 'syllable', inputStyle: 'continuous' },
+  liveStats: true,
+  scoring: { ignoreSpace: true, ignorePunct: false, unit: 'syllable', inputStyle: 'continuous', profile: 'custom' },
   syncToken: '',
 }
 

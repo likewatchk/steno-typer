@@ -5,10 +5,27 @@ import { initSound } from '../../lib/sound.ts'
 import * as repo from '../../lib/repo.ts'
 import { syncNow } from '../../lib/sync.ts'
 import { parseFileContent, parseWordsetJson } from '../wordset/importText.ts'
-import type { RangeSpec, SessionRecord } from '../../lib/types.ts'
+import { computeDuration } from '../../lib/scheduler.ts'
+import type { RangeSpec, SessionRecord, Settings } from '../../lib/types.ts'
 import s from './Home.module.css'
 
 const THEME_LABEL = { system: '테마: 시스템', light: '테마: 라이트', dark: '테마: 다크' } as const
+
+/** 자동 노출시간 미리보기: n글자 낱말이 몇 초 보이는지 */
+function autoPreview(st: Settings, chars: number): string {
+  const ms = computeDuration('가'.repeat(chars), {
+    durationMode: 'auto',
+    fixedMs: st.fixedMs,
+    autoBaseMs: st.autoBaseMs,
+    autoPerCharMs: st.autoPerCharMs,
+    autoMinMs: st.autoMinMs,
+    autoMaxMs: st.autoMaxMs,
+    autoSpeed: st.autoSpeed,
+    blankMs: 0,
+    countdownMs: 0,
+  })
+  return (ms / 1000).toFixed(1)
+}
 
 function fmtDate(ts: number): string {
   const d = new Date(ts)
@@ -119,7 +136,7 @@ export default function Home() {
   return (
     <div className={s.page}>
       <header className={s.header}>
-        <span className={s.logo}>깜빡이</span>
+        <span className={s.logo}>❤️ 나희의 속기 깜빡이</span>
         <button className="ghost" onClick={() => go({ name: 'free' })}>
           자유연습
         </button>
@@ -216,7 +233,7 @@ export default function Home() {
                     ]}
                     onChange={(durationMode) => patchSettings({ durationMode })}
                   />
-                  {settings.durationMode === 'fixed' ? (
+                  {settings.durationMode === 'fixed' && (
                     <>
                       <input
                         type="range"
@@ -228,12 +245,25 @@ export default function Home() {
                       />
                       <span className="num">{(settings.fixedMs / 1000).toFixed(1)}초</span>
                     </>
-                  ) : (
-                    <span className={s.hint}>
-                      {settings.autoMinMs / 1000}~{settings.autoMaxMs / 1000}초, 글자수 비례
-                    </span>
                   )}
                 </div>
+                {settings.durationMode === 'auto' && (
+                  <div className={s.inline}>
+                    <span className={s.hint}>여유있게</span>
+                    <input
+                      type="range"
+                      min={50}
+                      max={200}
+                      step={5}
+                      value={Math.round(settings.autoSpeed * 100)}
+                      onChange={(e) => patchSettings({ autoSpeed: +e.target.value / 100 })}
+                    />
+                    <span className={s.hint}>빡세게</span>
+                    <span className={`${s.hint} num`}>
+                      {autoPreview(settings, 3)}초/3글자 · {autoPreview(settings, 8)}초/8글자
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className={s.group}>
@@ -344,35 +374,54 @@ export default function Home() {
 
               {settings.mode === 'typing' && (
                 <div className={s.scoringBox}>
-                  <span className={s.groupLabel}>채점 옵션</span>
-                  <label className={s.check}>
-                    <input
-                      type="checkbox"
-                      checked={settings.scoring.ignoreSpace}
-                      onChange={(e) => patchScoring({ ignoreSpace: e.target.checked })}
-                    />
-                    띄어쓰기 무시 — 공백 차이는 틀림으로 치지 않음
-                  </label>
-                  <label className={s.check}>
-                    <input
-                      type="checkbox"
-                      checked={settings.scoring.ignorePunct}
-                      onChange={(e) => patchScoring({ ignorePunct: e.target.checked })}
-                    />
-                    문장부호 무시
-                  </label>
                   <div className={s.inline}>
-                    <span className={s.groupLabel}>채점 단위</span>
+                    <span className={s.groupLabel}>채점 기준</span>
                     <Seg
-                      value={settings.scoring.unit}
+                      value={settings.scoring.profile ?? 'custom'}
                       options={[
-                        ['syllable', '음절'],
-                        ['jamo', '자모'],
-                        ['keystroke', '타수'],
+                        ['exam', '공인시험 기준'],
+                        ['custom', '직접 설정'],
                       ]}
-                      onChange={(unit) => patchScoring({ unit })}
+                      onChange={(profile) => patchScoring({ profile })}
                     />
                   </div>
+                  {(settings.scoring.profile ?? 'custom') === 'exam' ? (
+                    <span className={s.hint}>
+                      속기 공인시험식 — 음절 단위 감점, 띄어쓰기·문장부호 무시,
+                      첨가도 감점. 정확률 = (글자수 − 오자·탈자·첨가) ÷ 글자수
+                    </span>
+                  ) : (
+                    <>
+                      <label className={s.check}>
+                        <input
+                          type="checkbox"
+                          checked={settings.scoring.ignoreSpace}
+                          onChange={(e) => patchScoring({ ignoreSpace: e.target.checked })}
+                        />
+                        띄어쓰기 무시 — 공백 차이는 틀림으로 치지 않음
+                      </label>
+                      <label className={s.check}>
+                        <input
+                          type="checkbox"
+                          checked={settings.scoring.ignorePunct}
+                          onChange={(e) => patchScoring({ ignorePunct: e.target.checked })}
+                        />
+                        문장부호 무시
+                      </label>
+                      <div className={s.inline}>
+                        <span className={s.groupLabel}>채점 단위</span>
+                        <Seg
+                          value={settings.scoring.unit}
+                          options={[
+                            ['syllable', '음절'],
+                            ['jamo', '자모'],
+                            ['keystroke', '타수'],
+                          ]}
+                          onChange={(unit) => patchScoring({ unit })}
+                        />
+                      </div>
+                    </>
+                  )}
                   <div className={s.inline}>
                     <span className={s.groupLabel}>입력 방식</span>
                     <Seg
@@ -384,6 +433,14 @@ export default function Home() {
                       onChange={(inputStyle) => patchScoring({ inputStyle })}
                     />
                   </div>
+                  <label className={s.check}>
+                    <input
+                      type="checkbox"
+                      checked={settings.liveStats}
+                      onChange={(e) => patchSettings({ liveStats: e.target.checked })}
+                    />
+                    실시간 채점 표시 — 연습 중 좌상단에 정확도·타수 (실전처럼 가리려면 끄기)
+                  </label>
                 </div>
               )}
 

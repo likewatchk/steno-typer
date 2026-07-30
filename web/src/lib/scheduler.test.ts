@@ -39,6 +39,21 @@ describe('computeDuration', () => {
     expect(computeDuration('가', c)).toBe(1000) // min 클램프
     expect(computeDuration('가'.repeat(100), c)).toBe(8000) // max 클램프
   })
+
+  it('배속(autoSpeed) — 시간 = 공식값 ÷ 배속, 클램프는 배속 후 적용', () => {
+    const base = cfg({ durationMode: 'auto' })
+    expect(computeDuration('가나다라마', cfg({ durationMode: 'auto', autoSpeed: 1 }))).toBe(1500)
+    expect(computeDuration('가나다라마', cfg({ durationMode: 'auto', autoSpeed: 1.5 }))).toBe(1000)
+    expect(computeDuration('가나다라마', cfg({ durationMode: 'auto', autoSpeed: 0.5 }))).toBe(3000)
+    // 빨라져도 최소시간 밑으로는 안 내려감
+    expect(computeDuration('가', cfg({ durationMode: 'auto', autoSpeed: 2 }))).toBe(1000)
+    // 범위 밖 배속은 0.5~2 로 클램프
+    expect(computeDuration('가나다라마', cfg({ durationMode: 'auto', autoSpeed: 99 }))).toBe(
+      computeDuration('가나다라마', cfg({ durationMode: 'auto', autoSpeed: 2 })),
+    )
+    // 미지정 = 1배속
+    expect(computeDuration('가나다라마', base)).toBe(1500)
+  })
 })
 
 describe('FlashTimeline', () => {

@@ -21,6 +21,8 @@ export interface TimelineConfig {
   autoPerCharMs: number
   autoMinMs: number
   autoMaxMs: number
+  /** 자동 노출시간 배속 — 시간 = 공식값 ÷ 배속. 미지정 시 1 */
+  autoSpeed?: number
   blankMs: number
   countdownMs: number // 0 이면 카운트다운 없음
 }
@@ -42,8 +44,9 @@ type Ev = { t: number; kind: 0 | 1 | 2 | 3; index: number } // 0=countdown 1=sho
 export function computeDuration(text: string, cfg: TimelineConfig): number {
   if (cfg.durationMode === 'fixed') return cfg.fixedMs
   const chars = [...text].length
-  const ms = cfg.autoBaseMs + cfg.autoPerCharMs * chars
-  return Math.min(cfg.autoMaxMs, Math.max(cfg.autoMinMs, ms))
+  const speed = Math.min(2, Math.max(0.5, cfg.autoSpeed ?? 1))
+  const ms = (cfg.autoBaseMs + cfg.autoPerCharMs * chars) / speed
+  return Math.round(Math.min(cfg.autoMaxMs, Math.max(cfg.autoMinMs, ms)))
 }
 
 export class FlashTimeline {

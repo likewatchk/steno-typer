@@ -32,6 +32,15 @@
   font-size: 14px;
 }
 
+.liveStats {
+  position: absolute;
+  top: 12px;
+  left: 18px;
+  color: var(--text-dim);
+  font-size: 14px;
+  contain: content; /* 갱신이 주변 레이아웃에 번지지 않게 */
+}
+
 .textWrap {
   flex: 1;
   min-height: 0;

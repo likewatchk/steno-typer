@@ -11,10 +11,11 @@ import { computeFitSizes, type FitResult } from '../../lib/fit.ts'
 import { newId } from '../../lib/db.ts'
 import { playTick } from '../../lib/sound.ts'
 import { FlashTimeline, type TimelineConfig } from '../../lib/scheduler.ts'
-import type { SessionRecord, SessionResult } from '../../lib/types.ts'
+import type { SessionRecord } from '../../lib/types.ts'
 import StenoInput, { type StenoInputHandle } from '../typing/StenoInput.tsx'
 import { setDiagEnabled } from '../typing/diagnostics.ts'
 import { simulateBurst, simulateIme, simulatePaste } from '../typing/simulator.ts'
+import type { WorkerIn, WorkerOut } from '../scoring/scoring.worker.ts'
 import s from './Practice.module.css'
 
 type Overlay = null | 'menu' | 'blur' | 'done' | 'scoring'
@@ -34,6 +35,7 @@ export default function Practice() {
   const counterRef = useRef<HTMLDivElement>(null)
   const cdRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
+  const liveRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<StenoInputHandle>(null)
 
   const engineRef = useRef<FlashTimeline | null>(null)
@@ -66,8 +68,10 @@ export default function Practice() {
     const boundaries: number[] = [] // continuous: i번째 항목 종료 시점의 입력 길이
     const answers: string[] = [] // discrete: 항목별 입력
     const startedAt = Date.now()
+    const continuous = settings.scoring.inputStyle === 'continuous'
+    // 실시간 표시 — 설정 토글, 안전 모드에선 강제 끔
+    const liveStats = typing && settings.liveStats && !settings.safeMode
     let finished = false
-    let worker: Worker | null = null
 
     const cfg: TimelineConfig = {
       durationMode: settings.durationMode,
@@ -76,6 +80,7 @@ export default function Practice() {
       autoPerCharMs: settings.autoPerCharMs,
       autoMinMs: settings.autoMinMs,
       autoMaxMs: settings.autoMaxMs,
+      autoSpeed: settings.autoSpeed,
       blankMs: settings.blankMs,
       countdownMs: settings.countdown ? 3000 : 0,
     }
@@ -83,31 +88,19 @@ export default function Practice() {
     const sound = settings.sound && !settings.safeMode
     const preview = settings.previewNext && !settings.safeMode
 
-    function onItemBoundary(prevIndex: number) {
-      const input = inputRef.current
-      if (!typing || !input) return
-      if (settings.scoring.inputStyle === 'continuous') {
-        boundaries[prevIndex] = input.value().length
-      } else {
-        answers[prevIndex] = input.takeAndClear()
-      }
-    }
-
-    function finishTyping() {
-      const input = inputRef.current
-      if (!input || !engineRef.current) return
-      setOverlay('scoring')
-      const elapsedMs = engineRef.current.practiceMs
-      const base = { targets: texts, options: settings.scoring, elapsedMs }
-      const req =
-        settings.scoring.inputStyle === 'continuous'
-          ? { ...base, mode: 'continuous' as const, fullText: input.value(), boundaries }
-          : (() => {
-              answers[texts.length - 1] = input.takeAndClear()
-              return { ...base, mode: 'discrete' as const, answers }
-            })()
+    // ---- 채점 워커 (타이핑 모드 전용, 마운트 시 1회 생성) ----
+    let worker: Worker | null = null
+    if (typing) {
       worker = new Worker(new URL('../scoring/scoring.worker.ts', import.meta.url), { type: 'module' })
-      worker.onmessage = (e: MessageEvent<SessionResult>) => {
+      worker.onmessage = (e: MessageEvent<WorkerOut>) => {
+        const msg = e.data
+        if (msg.kind === 'live') {
+          // 항목 전환마다 한 번, 작은 고정 요소의 textContent 갱신 — 프레임 영향 없음
+          if (liveRef.current && msg.scoredCount > 0) {
+            liveRef.current.textContent = `${(msg.accuracy * 100).toFixed(1)}% · ${Math.round(msg.kpm)}타/분`
+          }
+          return
+        }
         const record: SessionRecord = {
           id: newId(),
           wordsetId: plan!.wordset.id,
@@ -120,12 +113,73 @@ export default function Practice() {
           },
           startedAt,
           endedAt: Date.now(),
-          result: e.data,
+          result: msg.result,
           updatedAt: Date.now(),
         }
         useApp.getState().finishPractice(record)
       }
-      worker.postMessage(req)
+      if (liveStats) {
+        const init: WorkerIn = continuous
+          ? { kind: 'live-init', targets: texts, options: settings.scoring }
+          : { kind: 'live-discrete-init', options: settings.scoring }
+        worker.postMessage(init)
+      }
+    }
+
+    // 항목 i 표시 시점의 연습 경과(ms) — 타임라인이 고정이라 사전 계산 (일시정지 무관).
+    // tl.durations 로 아래(엔진 생성 직후)에서 채운다.
+    const elapsedAtShow: number[] = []
+
+    function onItemBoundary(prevIndex: number) {
+      const input = inputRef.current
+      if (!typing || !input) return
+      if (continuous) {
+        boundaries[prevIndex] = input.value().length
+        if (liveStats && worker) {
+          const msg: WorkerIn = {
+            kind: 'live-step',
+            fullText: input.value(),
+            boundaries: boundaries.slice(),
+            uptoItem: prevIndex,
+            elapsedMs: elapsedAtShow[prevIndex + 1] ?? 1,
+          }
+          worker.postMessage(msg)
+        }
+      } else {
+        answers[prevIndex] = input.takeAndClear()
+        if (liveStats && worker) {
+          const msg: WorkerIn = {
+            kind: 'live-discrete-step',
+            target: texts[prevIndex],
+            answer: answers[prevIndex],
+            elapsedMs: elapsedAtShow[prevIndex + 1] ?? 1,
+          }
+          worker.postMessage(msg)
+        }
+      }
+    }
+
+    function finishTyping() {
+      const input = inputRef.current
+      if (!input || !engineRef.current || !worker) return
+      setOverlay('scoring')
+      const elapsedMs = engineRef.current.practiceMs
+      let msg: WorkerIn
+      if (continuous) {
+        msg = liveStats
+          ? { kind: 'live-final', fullText: input.value(), boundaries: boundaries.slice(), elapsedMs }
+          : {
+              kind: 'batch',
+              req: { mode: 'continuous', targets: texts, options: settings.scoring, elapsedMs, fullText: input.value(), boundaries },
+            }
+      } else {
+        answers[texts.length - 1] = input.takeAndClear()
+        msg = {
+          kind: 'batch',
+          req: { mode: 'discrete', targets: texts, options: settings.scoring, elapsedMs, answers },
+        }
+      }
+      worker.postMessage(msg)
     }
 
     const tl = new FlashTimeline(items, cfg, {
@@ -172,6 +226,15 @@ export default function Practice() {
     })
     engineRef.current = tl
 
+    // elapsedAtShow 채움: 항목 i 가 뜨는 순간까지의 연습 경과
+    {
+      let acc = 0
+      for (let i = 0; i < items.length; i++) {
+        elapsedAtShow[i] = acc
+        acc += tl.durations[i] + (i < items.length - 1 ? cfg.blankMs : 0)
+      }
+    }
+
     // ---- rAF 러너 ----
     let raf = 0
     const loop = () => {
@@ -215,6 +278,7 @@ export default function Practice() {
       cancelAnimationFrame(raf)
       tl.stop()
       worker?.terminate()
+      worker = null
       if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {})
     }
     // 마운트 1회 세션 — plan/설정은 스냅샷 고정, planSeq 키로 리마운트
@@ -246,6 +310,9 @@ export default function Practice() {
         <div ref={barRef} className={s.barFill} />
       </div>
       <div ref={counterRef} className={`${s.counter} num`} />
+      {typing && settings.liveStats && !settings.safeMode && (
+        <div ref={liveRef} className={`${s.liveStats} num`} />
+      )}
 
       <div className={s.textWrap}>
         <div ref={textRef} className={`${s.flashText} ${noFade ? s.noFade : ''}`} />
