@@ -1,0 +1,53 @@
+/* 디자인 토큰 — 근단색 + 액센트 1색. 장식 없음, 여백과 1px 선으로만 구분. */
+:root {
+  --bg: #fafafa;
+  --bg-elev: #ffffff;
+  --text: #18181b;
+  --text-dim: #71717a;
+  --border: #e4e4e7;
+  --accent: #2563eb;
+  --accent-text: #ffffff;
+  --accent-dim: #dbeafe;
+  --ok: #16a34a;
+  --err: #dc2626;
+  --err-dim: #fee2e2;
+
+  --radius: 8px;
+  --font-sans: 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo',
+    'Malgun Gothic', 'Noto Sans KR', sans-serif;
+
+  color-scheme: light;
+}
+
+/* 다크 팔레트: (1) 수동 다크 (2) 시스템 다크 + 수동 라이트 아님 — 두 경로 동일 값 */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #101012;
+  --bg-elev: #1a1a1e;
+  --text: #f4f4f5;
+  --text-dim: #a1a1aa;
+  --border: #2a2a30;
+  --accent: #4f8ef7;
+  --accent-text: #ffffff;
+  --accent-dim: #1e2a45;
+  --ok: #4ade80;
+  --err: #f87171;
+  --err-dim: #3b1d1d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #101012;
+    --bg-elev: #1a1a1e;
+    --text: #f4f4f5;
+    --text-dim: #a1a1aa;
+    --border: #2a2a30;
+    --accent: #4f8ef7;
+    --accent-text: #ffffff;
+    --accent-dim: #1e2a45;
+    --ok: #4ade80;
+    --err: #f87171;
+    --err-dim: #3b1d1d;
+  }
+}

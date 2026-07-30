@@ -1,0 +1,68 @@
+.page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-weight: 700;
+}
+
+.counters {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 13px;
+  display: flex;
+  gap: 14px;
+}
+
+.input {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  resize: none;
+  padding: 24px max(24px, 8vw);
+  font-size: 22px;
+  line-height: 1.7;
+}
+
+.input:focus-visible {
+  outline: none;
+}
+
+.footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.hint {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.fontCtl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.fontCtl input {
+  width: 110px;
+}
