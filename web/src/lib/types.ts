@@ -104,6 +104,8 @@ export interface SessionResult {
   totalUnits: number
   correctUnits: number
   items: ItemScore[]
+  /** 사용자가 실제 친 원문 전체 (연속: 스트림 그대로, 낱개: 줄바꿈 결합) — 결과 화면 전문 보기·복사용 */
+  typedText: string
 }
 
 export interface SessionRecord {

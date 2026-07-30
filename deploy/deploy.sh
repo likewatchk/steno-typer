@@ -19,7 +19,10 @@ node deploy/size-gate.mjs
 
 echo "==[4/7] 전송 =="
 ssh "$HOST" 'mkdir -p ~/steno/data'
-rsync -az --delete web/dist/ "$HOST":steno/dist/
+# dist 는 --delete 금지: 해시 자산을 지우면 배포 전에 열려 있던 탭(구버전 SPA)이
+# 지연 로드(워커 등)에서 404 를 맞고 영원히 멈춘다 — 실제 발생했던 버그.
+# 해시 이름이라 충돌 없음. 오래된 잔량은 필요할 때 수동 정리.
+rsync -az web/dist/ "$HOST":steno/dist/
 rsync -az --delete api/ "$HOST":steno/api/
 rsync -az deploy/nginx.conf deploy/docker-compose.yml deploy/verify-vpn.sh "$HOST":steno/
 

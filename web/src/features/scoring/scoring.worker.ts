@@ -37,6 +37,7 @@ function buildResult(
   kpm: number,
   elapsedMs: number,
   profile: ScoringOptions['profile'],
+  typedText: string,
 ): SessionResult {
   const totalUnits = items.reduce((s, it) => s + it.correct + it.substituted + it.deleted, 0)
   const correctUnits = items.reduce((s, it) => s + it.correct, 0)
@@ -48,6 +49,7 @@ function buildResult(
     totalUnits,
     correctUnits,
     items,
+    typedText,
   }
 }
 
@@ -81,7 +83,13 @@ self.onmessage = (e: MessageEvent<WorkerIn>) => {
       if (!live) return
       const items = live.finalize(msg.fullText, msg.boundaries)
       const minutes = Math.max(msg.elapsedMs, 1000) / 60000
-      const result = buildResult(items, countKeystrokes(msg.fullText) / minutes, msg.elapsedMs, liveProfile)
+      const result = buildResult(
+        items,
+        countKeystrokes(msg.fullText) / minutes,
+        msg.elapsedMs,
+        liveProfile,
+        msg.fullText,
+      )
       live = null
       self.postMessage({ kind: 'final', result } satisfies WorkerOut)
       return

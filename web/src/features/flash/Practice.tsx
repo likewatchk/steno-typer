@@ -15,10 +15,19 @@ import type { SessionRecord } from '../../lib/types.ts'
 import StenoInput, { type StenoInputHandle } from '../typing/StenoInput.tsx'
 import { setDiagEnabled } from '../typing/diagnostics.ts'
 import { simulateBurst, simulateIme, simulatePaste } from '../typing/simulator.ts'
+import { scoreSession, type ScoreRequest } from '../scoring/score.ts'
+import type { SessionResult } from '../../lib/types.ts'
 import type { WorkerIn, WorkerOut } from '../scoring/scoring.worker.ts'
 import s from './Practice.module.css'
 
 type Overlay = null | 'menu' | 'blur' | 'done' | 'scoring'
+
+/**
+ * 채점 워커 무응답 감시 시간. 워커가 죽거나 로드에 실패해도(예: 배포로 구버전
+ * 자산이 사라진 열린 탭) 이 시간 안에 메인 스레드 채점으로 폴백한다 —
+ * "채점 중…" 무한 로딩은 구조적으로 불가능. 테스트에서 짧게 조정 가능.
+ */
+export const SCORING_WATCHDOG = { ms: 8000 }
 
 export default function Practice() {
   const plan = useApp((st) => st.plan)
@@ -88,41 +97,79 @@ export default function Practice() {
     const sound = settings.sound && !settings.safeMode
     const preview = settings.previewNext && !settings.safeMode
 
+    // ---- 채점 완료 경로 (워커 정상 / 폴백 공용) ----
+    let finalized = false
+    let watchdog = 0
+    /** 폴백 채점용 — finishTyping 시점에 채워진다 */
+    let finalReq: ScoreRequest | null = null
+
+    function completeWith(result: SessionResult) {
+      if (finalized) return
+      finalized = true
+      window.clearTimeout(watchdog)
+      const record: SessionRecord = {
+        id: newId(),
+        wordsetId: plan!.wordset.id,
+        wordsetName: plan!.wordset.name,
+        mode: 'typing',
+        settings: {
+          durationMode: settings.durationMode,
+          fixedMs: settings.fixedMs,
+          scoring: settings.scoring,
+        },
+        startedAt,
+        endedAt: Date.now(),
+        result,
+        updatedAt: Date.now(),
+      }
+      useApp.getState().finishPractice(record)
+    }
+
+    /** 워커 무응답·사망 시 메인 스레드에서 직접 채점 — 무한 "채점 중" 차단 */
+    function mainThreadFallback() {
+      if (finalized || !finalReq) return
+      try {
+        completeWith(scoreSession(finalReq))
+      } catch {
+        // 최후의 탈출구 — 결과 없이라도 화면은 복귀시킨다
+        finalized = true
+        useApp.getState().finishPractice(null)
+      }
+    }
+
     // ---- 채점 워커 (타이핑 모드 전용, 마운트 시 1회 생성) ----
     let worker: Worker | null = null
+    let workerDead = false
     if (typing) {
-      worker = new Worker(new URL('../scoring/scoring.worker.ts', import.meta.url), { type: 'module' })
-      worker.onmessage = (e: MessageEvent<WorkerOut>) => {
-        const msg = e.data
-        if (msg.kind === 'live') {
-          // 항목 전환마다 한 번, 작은 고정 요소의 textContent 갱신 — 프레임 영향 없음
-          if (liveRef.current && msg.scoredCount > 0) {
-            liveRef.current.textContent = `${(msg.accuracy * 100).toFixed(1)}% · ${Math.round(msg.kpm)}타/분`
-          }
-          return
-        }
-        const record: SessionRecord = {
-          id: newId(),
-          wordsetId: plan!.wordset.id,
-          wordsetName: plan!.wordset.name,
-          mode: 'typing',
-          settings: {
-            durationMode: settings.durationMode,
-            fixedMs: settings.fixedMs,
-            scoring: settings.scoring,
-          },
-          startedAt,
-          endedAt: Date.now(),
-          result: msg.result,
-          updatedAt: Date.now(),
-        }
-        useApp.getState().finishPractice(record)
+      try {
+        worker = new Worker(new URL('../scoring/scoring.worker.ts', import.meta.url), { type: 'module' })
+      } catch {
+        worker = null
+        workerDead = true
       }
-      if (liveStats) {
-        const init: WorkerIn = continuous
-          ? { kind: 'live-init', targets: texts, options: settings.scoring }
-          : { kind: 'live-discrete-init', options: settings.scoring }
-        worker.postMessage(init)
+      if (worker) {
+        worker.onmessage = (e: MessageEvent<WorkerOut>) => {
+          const msg = e.data
+          if (msg.kind === 'live') {
+            // 항목 전환마다 한 번, 작은 고정 요소의 textContent 갱신 — 프레임 영향 없음
+            if (liveRef.current && msg.scoredCount > 0) {
+              liveRef.current.textContent = `${(msg.accuracy * 100).toFixed(1)}% · ${Math.round(msg.kpm)}타/분`
+            }
+            return
+          }
+          completeWith(msg.result)
+        }
+        worker.onerror = () => {
+          // 로드 실패(404 등)·스크립트 오류 — 실시간은 포기, 최종 채점은 폴백으로
+          workerDead = true
+          if (finalReq) mainThreadFallback()
+        }
+        if (liveStats) {
+          const init: WorkerIn = continuous
+            ? { kind: 'live-init', targets: texts, options: settings.scoring }
+            : { kind: 'live-discrete-init', options: settings.scoring }
+          worker.postMessage(init)
+        }
       }
     }
 
@@ -161,25 +208,35 @@ export default function Practice() {
 
     function finishTyping() {
       const input = inputRef.current
-      if (!input || !engineRef.current || !worker) return
+      if (!input || !engineRef.current) return
       setOverlay('scoring')
       const elapsedMs = engineRef.current.practiceMs
-      let msg: WorkerIn
+
+      // 폴백 채점에 쓸 요청을 먼저 확정 (워커가 죽어 있어도 채점 가능해야 한다)
       if (continuous) {
-        msg = liveStats
-          ? { kind: 'live-final', fullText: input.value(), boundaries: boundaries.slice(), elapsedMs }
-          : {
-              kind: 'batch',
-              req: { mode: 'continuous', targets: texts, options: settings.scoring, elapsedMs, fullText: input.value(), boundaries },
-            }
+        finalReq = {
+          mode: 'continuous',
+          targets: texts,
+          options: settings.scoring,
+          elapsedMs,
+          fullText: input.value(),
+          boundaries: boundaries.slice(),
+        }
       } else {
         answers[texts.length - 1] = input.takeAndClear()
-        msg = {
-          kind: 'batch',
-          req: { mode: 'discrete', targets: texts, options: settings.scoring, elapsedMs, answers },
-        }
+        finalReq = { mode: 'discrete', targets: texts, options: settings.scoring, elapsedMs, answers: answers.slice() }
       }
+
+      if (!worker || workerDead) {
+        mainThreadFallback()
+        return
+      }
+      const msg: WorkerIn =
+        continuous && liveStats
+          ? { kind: 'live-final', fullText: finalReq.mode === 'continuous' ? finalReq.fullText : '', boundaries: boundaries.slice(), elapsedMs }
+          : { kind: 'batch', req: finalReq }
       worker.postMessage(msg)
+      watchdog = window.setTimeout(mainThreadFallback, SCORING_WATCHDOG.ms)
     }
 
     const tl = new FlashTimeline(items, cfg, {
@@ -277,6 +334,7 @@ export default function Practice() {
       document.removeEventListener('visibilitychange', onVis)
       cancelAnimationFrame(raf)
       tl.stop()
+      window.clearTimeout(watchdog)
       worker?.terminate()
       worker = null
       if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {})

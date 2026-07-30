@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useApp } from '../../app/store.ts'
+import { copyText } from '../../lib/copy.ts'
 import * as repo from '../../lib/repo.ts'
 import { prepareItems } from '../../lib/scheduler.ts'
 import { initSound } from '../../lib/sound.ts'
@@ -13,10 +15,19 @@ function fmtMs(ms: number): string {
 export default function Result({ record }: { record: SessionRecord }) {
   const { go, reloadWordsets, select, startPracticeWith } = useApp.getState()
   const settings = useApp((st) => st.settings)
+  const [copyLabel, setCopyLabel] = useState('복사')
   const result = record.result
   if (!result) return null
 
   const wrongTargets = [...new Set(result.items.filter((it) => it.errors > 0).map((it) => it.target))]
+  // 구버전 기록엔 typedText 가 없다 — 항목 입력을 이어붙여 폴백
+  const typedText = result.typedText ?? result.items.map((it) => it.input).join('\n')
+
+  async function onCopy() {
+    const ok = await copyText(typedText)
+    setCopyLabel(ok ? '복사됨 ✓' : '복사 실패 — 직접 선택해 주세요')
+    window.setTimeout(() => setCopyLabel('복사'), 2500)
+  }
 
   function enterFullscreenMaybe() {
     initSound()
@@ -110,6 +121,22 @@ export default function Result({ record }: { record: SessionRecord }) {
           </div>
         ))}
       </section>
+
+      <details className={s.typedBox}>
+        <summary>
+          내가 친 전문 보기
+          <button
+            className={s.copyBtn}
+            onClick={(e) => {
+              e.preventDefault() // summary 토글 방지
+              void onCopy()
+            }}
+          >
+            {copyLabel}
+          </button>
+        </summary>
+        <textarea className={s.typedText} readOnly value={typedText} rows={Math.min(14, typedText.split('\n').length + 2)} />
+      </details>
 
       <div className={s.actions}>
         <button className="primary" disabled={!wrongTargets.length} onClick={() => void retryWrong()}>

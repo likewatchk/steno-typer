@@ -254,13 +254,16 @@ export function scoreSession(req: ScoreRequest): SessionResult {
 
   let items: ItemScore[]
   let rawTyped: string
+  let typedText: string
   if (req.mode === 'discrete') {
     rawTyped = targets.map((_, i) => req.answers[i] ?? '').join('')
+    typedText = targets.map((_, i) => req.answers[i] ?? '').join('\n')
     items = targets.map((t, i) =>
       scoreItem(normalizeText(t, options), normalizeText(req.answers[i] ?? '', options), t, options),
     )
   } else {
     rawTyped = req.fullText
+    typedText = req.fullText
     items = new ContinuousScorer(targets, options).finalize(req.fullText, req.boundaries)
   }
 
@@ -275,5 +278,6 @@ export function scoreSession(req: ScoreRequest): SessionResult {
     totalUnits,
     correctUnits,
     items,
+    typedText,
   }
 }
