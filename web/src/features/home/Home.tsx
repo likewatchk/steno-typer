@@ -116,6 +116,7 @@ export default function Home() {
     const out = await syncNow(token)
     if (out.ok) {
       await reloadWordsets()
+      await useApp.getState().reloadRecent() // pull 로 바뀐 기록도 반영
       setSyncState(out.message)
     } else {
       if (out.message.includes('암호가 틀립')) patchSettings({ syncToken: '' })

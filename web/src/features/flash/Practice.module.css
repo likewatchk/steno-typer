@@ -7,6 +7,14 @@
   z-index: 10;
 }
 
+/* 모바일: 소프트 키보드가 올라와도 입력 영역이 가려지지 않게 동적 뷰포트 사용 */
+@supports (height: 100dvh) {
+  .stage {
+    bottom: auto;
+    height: 100dvh;
+  }
+}
+
 .barTrack {
   position: absolute;
   top: 0;

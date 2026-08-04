@@ -67,6 +67,9 @@
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   align-items: baseline;
+  /* 대형 세션 결과에서 화면 밖 행 렌더 스킵 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
 }
 
 .row:last-child {

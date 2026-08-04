@@ -3,7 +3,7 @@
  * StenoInput 의 방어 규칙 그대로, 깜빡이 없이 입력만.
  * 카운터 갱신도 DOM 직접 기록 (타이핑 중 React 리렌더 0).
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useApp } from '../../app/store.ts'
 import { countKeystrokes } from '../../lib/hangul.ts'
 import StenoInput, { type StenoInputHandle } from './StenoInput.tsx'
@@ -19,7 +19,7 @@ export default function FreePractice() {
   const inputRef = useRef<StenoInputHandle>(null)
   const charsRef = useRef<HTMLSpanElement>(null)
   const strokesRef = useRef<HTMLSpanElement>(null)
-  const [, forceRender] = useState(0)
+  const diagCountRef = useRef<HTMLSpanElement>(null)
 
   const pendingRef = useRef(false)
   const saveTimerRef = useRef(0)
@@ -61,6 +61,7 @@ export default function FreePractice() {
     const v = inputRef.current?.value() ?? ''
     if (charsRef.current) charsRef.current.textContent = `${[...v].length.toLocaleString()}자`
     if (strokesRef.current) strokesRef.current.textContent = `${countKeystrokes(v).toLocaleString()}타`
+    if (diagCountRef.current) diagCountRef.current.textContent = diagCount().toLocaleString()
   }
 
   function onDirty() {
@@ -138,13 +139,8 @@ export default function FreePractice() {
           <span className="num">{inputFontPx}px</span>
         </label>
         {diagnostics && (
-          <button
-            onClick={() => {
-              diagExport()
-              forceRender((n) => n + 1)
-            }}
-          >
-            진단 로그 내보내기 ({diagCount().toLocaleString()})
+          <button onClick={() => diagExport()}>
+            진단 로그 내보내기 (<span ref={diagCountRef} className="num">0</span>)
           </button>
         )}
         <span className={s.hint}>새로고침해도 내용이 남습니다 · 저장은 .txt 다운로드</span>

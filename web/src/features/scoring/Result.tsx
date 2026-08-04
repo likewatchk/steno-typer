@@ -66,6 +66,11 @@ export default function Result({ record }: { record: SessionRecord }) {
         </button>
         <span className={s.title}>{record.wordsetName} — 결과</span>
         <span className={s.subStats}>
+          <span>
+            {record.settings.scoring.profile === 'exam'
+              ? '공인시험 기준'
+              : `${{ syllable: '음절', jamo: '자모', keystroke: '타수' }[record.settings.scoring.unit]} 단위${record.settings.scoring.ignoreSpace ? ' · 띄어쓰기 무시' : ''}`}
+          </span>
           <span className="num">
             오타 {result.items.reduce((a, b) => a + b.substituted, 0)} · 누락{' '}
             {result.items.reduce((a, b) => a + b.deleted, 0)} · 삽입{' '}
@@ -142,7 +147,7 @@ export default function Result({ record }: { record: SessionRecord }) {
         <button className="primary" disabled={!wrongTargets.length} onClick={() => void retryWrong()}>
           오답만 다시 ({wrongTargets.length})
         </button>
-        <button onClick={retrySameSettings}>같은 설정 다시</button>
+        <button onClick={retrySameSettings}>이 단어장 다시 (현재 설정)</button>
         <button onClick={() => go({ name: 'home' })}>홈</button>
       </div>
     </div>

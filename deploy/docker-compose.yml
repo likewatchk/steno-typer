@@ -1,11 +1,20 @@
 # steno — 호스트에 설치하는 것 없이 컨테이너만.
 # 반드시 `-p steno -f ~/steno/docker-compose.yml` 로 한정 실행 (다른 컨테이너 불가침).
 # SELinux Enforcing — 바인드 마운트에 :Z 라벨 필수.
+x-logging: &logging
+  # 로그 무한 증식 방지 — 컨테이너당 최대 10MB
+  logging:
+    driver: json-file
+    options:
+      max-size: "5m"
+      max-file: "2"
+
 services:
   web:
     image: nginx:alpine
     container_name: steno-web
     restart: unless-stopped
+    <<: *logging
     ports:
       - "1004:80" # 호스트 1004 만 사용 — VPN(443/1194)·network-inspector(5000) 무접점
     volumes:
@@ -19,6 +28,7 @@ services:
     image: steno-api:latest
     container_name: steno-api
     restart: unless-stopped
+    <<: *logging
     env_file: .env # STENO_TOKEN
     volumes:
       - ./data:/data:Z

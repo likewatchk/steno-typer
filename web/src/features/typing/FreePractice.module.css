@@ -6,6 +6,14 @@
   background: var(--bg);
 }
 
+/* 모바일: 소프트 키보드 대응 동적 뷰포트 */
+@supports (height: 100dvh) {
+  .page {
+    bottom: auto;
+    height: 100dvh;
+  }
+}
+
 .header {
   display: flex;
   align-items: center;

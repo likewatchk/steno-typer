@@ -31,6 +31,7 @@ interface AppState {
   go(screen: Screen): void
   select(id: string): void
   reloadWordsets(): Promise<void>
+  reloadRecent(): Promise<void>
   removeWordset(id: string): Promise<void>
   patchSettings(patch: Partial<Settings>): void
   patchScoring(patch: Partial<Settings['scoring']>): void
@@ -80,6 +81,10 @@ export const useApp = create<AppState>((set, get) => ({
       wordsets,
       selectedId: selectedId && wordsets.some((w) => w.id === selectedId) ? selectedId : (wordsets[0]?.id ?? null),
     })
+  },
+
+  async reloadRecent() {
+    set({ recent: await repo.listSessions(10) })
   },
 
   async removeWordset(id) {

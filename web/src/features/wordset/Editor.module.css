@@ -86,6 +86,9 @@
   gap: 4px;
   border-bottom: 1px solid var(--border);
   padding: 2px 6px 2px 0;
+  /* 대형 단어장(1만 항목)에서 화면 밖 행 렌더 스킵 — 지원 안 하면 무시됨 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 38px;
 }
 
 .item:last-child {
