@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeTextBuffer, parseWordsetJson, splitText } from './importText.ts'
+import { decodeTextBuffer, parseFileContent, parseWordsetJson, splitText } from './importText.ts'
 
 describe('decodeTextBuffer', () => {
   it('UTF-8 정상 디코드', () => {
@@ -34,12 +34,42 @@ describe('splitText', () => {
 })
 
 describe('parseWordsetJson', () => {
-  it('단일/배열 모두 허용', () => {
-    expect(parseWordsetJson('{"name":"A","items":["가","나"]}')).toEqual([{ name: 'A', items: ['가', '나'] }])
+  it('단일/배열 모두 허용 (문자열 items 는 {t}로)', () => {
+    expect(parseWordsetJson('{"name":"A","items":["가","나"]}')).toEqual([
+      { name: 'A', items: [{ t: '가' }, { t: '나' }] },
+    ])
     expect(parseWordsetJson('[{"name":"A","items":["가"]},{"name":"B","items":["나"]}]').length).toBe(2)
+  })
+
+  it('구조형 items — t/h 및 text/hint 별칭 허용', () => {
+    expect(
+      parseWordsetJson('{"name":"약어","items":[{"t":"것도","h":"ㄱㅅ-ㄷ"},{"text":"하다","hint":"-ㅎㄷ"},"평문"]}'),
+    ).toEqual([
+      { name: '약어', items: [{ t: '것도', h: 'ㄱㅅ-ㄷ' }, { t: '하다', h: '-ㅎㄷ' }, { t: '평문' }] },
+    ])
   })
 
   it('items 없으면 오류', () => {
     expect(() => parseWordsetJson('{"name":"A"}')).toThrow()
+  })
+})
+
+describe('힌트 파일 형식', () => {
+  it('.txt 탭 구분 힌트', () => {
+    const buf = new TextEncoder().encode('것도\tㄱㅅ-ㄷ\n평문\n하다\t-ㅎㄷ').buffer
+    expect(parseFileContent('약어.txt', buf as ArrayBuffer)).toEqual([
+      { t: '것도', h: 'ㄱㅅ-ㄷ' },
+      { t: '평문' },
+      { t: '하다', h: '-ㅎㄷ' },
+    ])
+  })
+
+  it('.csv 2열 힌트 (따옴표 포함)', () => {
+    const buf = new TextEncoder().encode('것도,ㄱㅅ-ㄷ\n"쉼표,포함",힌트2\n평문').buffer
+    expect(parseFileContent('약어.csv', buf as ArrayBuffer)).toEqual([
+      { t: '것도', h: 'ㄱㅅ-ㄷ' },
+      { t: '쉼표,포함', h: '힌트2' },
+      { t: '평문' },
+    ])
   })
 })

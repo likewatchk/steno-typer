@@ -24,7 +24,9 @@ ssh "$HOST" 'mkdir -p ~/steno/data'
 # 해시 이름이라 충돌 없음. 오래된 잔량은 필요할 때 수동 정리.
 rsync -az web/dist/ "$HOST":steno/dist/
 rsync -az --delete api/ "$HOST":steno/api/
-rsync -az deploy/nginx.conf deploy/docker-compose.yml deploy/verify-vpn.sh "$HOST":steno/
+# --inplace: nginx.conf 는 단일 파일 바인드 마운트라 inode 가 바뀌면
+# 컨테이너가 옛 파일을 계속 본다 (실제 발생) — 제자리 갱신으로 방지
+rsync -az --inplace deploy/nginx.conf deploy/docker-compose.yml deploy/verify-vpn.sh "$HOST":steno/
 
 # .env(동기화 토큰) — 없을 때만 생성, 절대 덮어쓰지 않는다
 ssh "$HOST" 'test -f ~/steno/.env || { umask 077; echo "STENO_TOKEN=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d " \n")" > ~/steno/.env; echo "새 동기화 토큰 생성됨"; }'

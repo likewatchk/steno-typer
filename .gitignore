@@ -14,3 +14,7 @@ coverage/
 firewall-before-*.txt
 __pycache__/
 .claude/
+
+# 약어노트 원본 사진 (용량 — 로컬·서버에만 보관)
+shortcuts/
+seed-shortcuts/review/photos/

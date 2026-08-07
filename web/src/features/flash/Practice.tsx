@@ -45,6 +45,7 @@ export default function Practice() {
   const cdRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const liveRef = useRef<HTMLDivElement>(null)
+  const hintRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<StenoInputHandle>(null)
 
   const engineRef = useRef<FlashTimeline | null>(null)
@@ -96,6 +97,9 @@ export default function Practice() {
 
     const sound = settings.sound && !settings.safeMode
     const preview = settings.previewNext && !settings.safeMode
+    // 약어 힌트 — 항목에 힌트가 있고 모드가 켜져 있을 때만
+    const hintsOn = settings.hintMode !== 'off' && items.some((it) => it.hint)
+    let hintTimer = 0
 
     // ---- 채점 완료 경로 (워커 정상 / 폴백 공용) ----
     let finalized = false
@@ -260,6 +264,21 @@ export default function Practice() {
         const counter = counterRef.current
         if (counter) counter.textContent = `${i + 1} / ${items.length}`
         if (preview && previewRef.current) previewRef.current.textContent = texts[i + 1] ?? ''
+        if (hintsOn && hintRef.current) {
+          window.clearTimeout(hintTimer)
+          const hint = items[i].hint ?? ''
+          if (settings.hintMode === 'show') {
+            hintRef.current.textContent = hint
+          } else {
+            // 지연 표시 — 먼저 떠올려 보게 하고, N초 뒤에 답을 보여준다
+            hintRef.current.textContent = ''
+            if (hint) {
+              hintTimer = window.setTimeout(() => {
+                if (hintRef.current) hintRef.current.textContent = hint
+              }, settings.hintDelayMs)
+            }
+          }
+        }
         if (sound) playTick()
       },
       onBlank() {
@@ -335,6 +354,7 @@ export default function Practice() {
       cancelAnimationFrame(raf)
       tl.stop()
       window.clearTimeout(watchdog)
+      window.clearTimeout(hintTimer)
       worker?.terminate()
       worker = null
       if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {})
@@ -374,6 +394,9 @@ export default function Practice() {
 
       <div className={s.textWrap}>
         <div ref={textRef} className={`${s.flashText} ${noFade ? s.noFade : ''}`} />
+        {settings.hintMode !== 'off' && plan.items.some((it) => it.hint) && (
+          <div ref={hintRef} className={s.hintSlot} />
+        )}
         {settings.previewNext && !settings.safeMode && <div ref={previewRef} className={s.preview} />}
         <div ref={cdRef} className={`${s.countdown} num`} />
       </div>

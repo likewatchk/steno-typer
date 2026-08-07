@@ -36,6 +36,35 @@
   border-radius: var(--radius);
 }
 
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab,
+.tabOn {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 4px;
+  font-size: 13px;
+  color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+}
+
+.tabOn {
+  color: var(--text);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
+.tab:hover {
+  border-color: transparent;
+  border-bottom-color: var(--border);
+  color: var(--text);
+}
+
 .listHead {
   display: flex;
   gap: 8px;

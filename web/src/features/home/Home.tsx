@@ -62,15 +62,26 @@ export default function Home() {
   const { go, select, patchSettings, patchScoring, startPractice, reloadWordsets } = useApp.getState()
 
   const [query, setQuery] = useState('')
+  const [tab, setTab] = useState<'all' | 'normal' | 'abbr'>('all')
   const [themeLabel, setThemeLabel] = useState(() => THEME_LABEL[getThemePref()])
   const [syncState, setSyncState] = useState<'idle' | 'busy' | string>('idle')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const selected = wordsets.find((w) => w.id === selectedId) ?? null
-  const filtered = useMemo(
-    () => (query.trim() ? wordsets.filter((w) => w.name.includes(query.trim())) : wordsets),
-    [wordsets, query],
+  const isAbbr = (name: string) => name.startsWith('약어') || name.startsWith('오답 — 약어')
+  const counts = useMemo(
+    () => ({
+      abbr: wordsets.filter((w) => isAbbr(w.name)).length,
+      normal: wordsets.filter((w) => !isAbbr(w.name)).length,
+    }),
+    [wordsets],
   )
+  const filtered = useMemo(() => {
+    let list = wordsets
+    if (tab === 'abbr') list = list.filter((w) => isAbbr(w.name))
+    else if (tab === 'normal') list = list.filter((w) => !isAbbr(w.name))
+    return query.trim() ? list.filter((w) => w.name.includes(query.trim())) : list
+  }, [wordsets, query, tab])
 
   const range = settings.range
   const canStart = !!selected && selected.items.length > 0
@@ -152,6 +163,29 @@ export default function Home() {
       <div className={s.grid}>
         {/* ---- 좌: 단어장 목록 ---- */}
         <section className={s.panel} aria-label="단어장 목록">
+          <div className={s.tabs} role="tablist">
+            <button
+              role="tab"
+              className={tab === 'all' ? s.tabOn : s.tab}
+              onClick={() => setTab('all')}
+            >
+              전체 <span className="num">{wordsets.length}</span>
+            </button>
+            <button
+              role="tab"
+              className={tab === 'normal' ? s.tabOn : s.tab}
+              onClick={() => setTab('normal')}
+            >
+              일반 연습 <span className="num">{counts.normal}</span>
+            </button>
+            <button
+              role="tab"
+              className={tab === 'abbr' ? s.tabOn : s.tab}
+              onClick={() => setTab('abbr')}
+            >
+              약어 <span className="num">{counts.abbr}</span>
+            </button>
+          </div>
           <div className={s.listHead}>
             <input
               type="text"
@@ -208,7 +242,7 @@ export default function Home() {
                     편집
                   </button>
                 </div>
-                <div className={s.preview}>{selected.items.slice(0, 5).join(' · ')}</div>
+                <div className={s.preview}>{selected.items.slice(0, 5).map((it) => it.t).join(' · ')}</div>
               </div>
 
               <div className={s.group}>
@@ -266,6 +300,36 @@ export default function Home() {
                   </div>
                 )}
               </div>
+
+              {selected.items.some((it) => it.h) && (
+                <div className={s.group}>
+                  <span className={s.groupLabel}>약어 힌트 — 항목에 저장된 타법 표시</span>
+                  <div className={s.inline}>
+                    <Seg
+                      value={settings.hintMode}
+                      options={[
+                        ['show', '바로 표시'],
+                        ['delayed', '지연 표시'],
+                        ['off', '끔 (실전)'],
+                      ]}
+                      onChange={(hintMode) => patchSettings({ hintMode })}
+                    />
+                    {settings.hintMode === 'delayed' && (
+                      <label className={s.inline}>
+                        <input
+                          type="range"
+                          min={300}
+                          max={4000}
+                          step={100}
+                          value={settings.hintDelayMs}
+                          onChange={(e) => patchSettings({ hintDelayMs: +e.target.value })}
+                        />
+                        <span className="num">{(settings.hintDelayMs / 1000).toFixed(1)}초 뒤</span>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className={s.group}>
                 <span className={s.groupLabel}>글자 크기</span>

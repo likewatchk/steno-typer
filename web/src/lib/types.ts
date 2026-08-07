@@ -1,9 +1,23 @@
 /** 공유 도메인 타입 */
 
+/** 단어장 항목 — t: 원말(채점 대상), h: 힌트(약어 타법 등, 표시 전용) */
+export interface WordItem {
+  t: string
+  h?: string
+}
+
+/** 입력 유연성: 문자열(레거시·간편)과 구조형 모두 허용 */
+export type WordInput = string | WordItem
+
+export function toWordItem(x: WordInput): WordItem {
+  if (typeof x === 'string') return { t: x }
+  return x.h ? { t: x.t, h: x.h } : { t: x.t }
+}
+
 export interface Wordset {
   id: string
   name: string
-  items: string[]
+  items: WordItem[]
   createdAt: number
   updatedAt: number
 }
@@ -54,6 +68,9 @@ export interface Settings {
   inputFontPx: number
   /** 연습 중 실시간 정확도·타수 표시 (실전처럼 가리려면 끔) */
   liveStats: boolean
+  /** 약어 힌트 표시 — off: 안 보임(실전) / show: 바로 / delayed: N초 뒤(회상 훈련) */
+  hintMode: 'off' | 'show' | 'delayed'
+  hintDelayMs: number
   scoring: ScoringOptions
   syncToken: string
 }
@@ -80,6 +97,8 @@ export const DEFAULT_SETTINGS: Settings = {
   flashScale: 1,
   inputFontPx: 26,
   liveStats: true,
+  hintMode: 'show',
+  hintDelayMs: 1000,
   scoring: { ignoreSpace: true, ignorePunct: false, unit: 'syllable', inputStyle: 'continuous', profile: 'custom' },
   syncToken: '',
 }

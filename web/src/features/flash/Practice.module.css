@@ -80,6 +80,15 @@
   transition: none;
 }
 
+.hintSlot {
+  min-height: 46px;
+  font-size: 28px;
+  color: var(--text-dim);
+  letter-spacing: 0.12em;
+  text-align: center;
+  contain: content; /* 힌트 등장이 본문 레이아웃을 흔들지 않게 */
+}
+
 .preview {
   position: absolute;
   bottom: 18px;

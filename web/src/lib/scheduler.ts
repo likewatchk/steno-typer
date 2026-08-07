@@ -6,10 +6,12 @@
  * setInterval 드리프트가 원천적으로 없고, rAF 는 바깥(러너)에서 붙인다.
  * 루프 경로에 힙 할당 없음 — 이벤트 배열은 시작 시 1회 생성.
  */
-import type { RangeSpec, Settings } from './types.ts'
+import { toWordItem, type RangeSpec, type Settings, type WordInput } from './types.ts'
 
 export interface EngineItem {
   text: string
+  /** 약어 타법 등 표시 전용 힌트 */
+  hint?: string
   /** 원본 단어장에서의 0-기반 위치 (오답 단어장 생성용) */
   sourceIndex: number
 }
@@ -161,12 +163,15 @@ function shuffleInPlace<T>(arr: T[]): T[] {
 
 /** 범위 → 반복 → 순서 적용. 반복이 셔플과 결합되면 회차마다 독립 셔플. */
 export function prepareItems(
-  items: string[],
+  items: WordInput[],
   range: RangeSpec,
   order: Settings['order'],
   repeat: number,
 ): EngineItem[] {
-  let picked: EngineItem[] = items.map((text, sourceIndex) => ({ text, sourceIndex }))
+  let picked: EngineItem[] = items.map((raw, sourceIndex) => {
+    const it = toWordItem(raw)
+    return it.h ? { text: it.t, hint: it.h, sourceIndex } : { text: it.t, sourceIndex }
+  })
   if (range.kind === 'span') {
     const from = Math.max(1, Math.min(range.from, items.length))
     const to = Math.max(from, Math.min(range.to, items.length))

@@ -3,25 +3,42 @@
  * IndexedDB(로컬)가 정본, 서버 동기화는 sync.ts 가 이 위에서 수행.
  */
 import { getDB, newId } from './db.ts'
-import { DEFAULT_SETTINGS, type SessionRecord, type Settings, type Wordset } from './types.ts'
+import {
+  DEFAULT_SETTINGS,
+  toWordItem,
+  type SessionRecord,
+  type Settings,
+  type WordInput,
+  type Wordset,
+} from './types.ts'
+
+/**
+ * 항목 정규화 — 레거시(string[])·서버 스냅샷·외부 JSON 이 무엇을 주든
+ * 읽기 경계에서 {t,h?} 로 통일한다. 화면·엔진은 구조형만 본다.
+ */
+function normalizeWordset(ws: Wordset): Wordset {
+  const raw = ws.items as unknown as WordInput[]
+  return { ...ws, items: raw.map(toWordItem).filter((it) => it.t.length > 0) }
+}
 
 export async function listWordsets(): Promise<Wordset[]> {
   const db = await getDB()
   const all = await db.getAll('wordsets')
-  return all.sort((a, b) => b.updatedAt - a.updatedAt)
+  return all.map(normalizeWordset).sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
 export async function getWordset(id: string): Promise<Wordset | undefined> {
-  return (await getDB()).get('wordsets', id)
+  const ws = await (await getDB()).get('wordsets', id)
+  return ws && normalizeWordset(ws)
 }
 
 export async function saveWordset(ws: Wordset): Promise<void> {
-  await (await getDB()).put('wordsets', ws)
+  await (await getDB()).put('wordsets', normalizeWordset(ws))
 }
 
-export async function createWordset(name: string, items: string[]): Promise<Wordset> {
+export async function createWordset(name: string, items: WordInput[]): Promise<Wordset> {
   const now = Date.now()
-  const ws: Wordset = { id: newId(), name, items, createdAt: now, updatedAt: now }
+  const ws: Wordset = { id: newId(), name, items: items.map(toWordItem), createdAt: now, updatedAt: now }
   await saveWordset(ws)
   return ws
 }

@@ -111,6 +111,13 @@
   border-radius: 0;
 }
 
+.itemHint {
+  flex: 0 0 34% !important;
+  color: var(--text-dim);
+  border-left: 1px solid var(--border) !important;
+  letter-spacing: 0.08em;
+}
+
 .itemDel {
   border: 0;
   background: transparent;

@@ -40,7 +40,14 @@ export default function Result({ record }: { record: SessionRecord }) {
     if (!wrongTargets.length) return
     const d = new Date()
     const stamp = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-    const ws = await repo.createWordset(`오답 — ${record.wordsetName} (${stamp})`, wrongTargets)
+    // 원본 단어장이 남아 있으면 힌트(약어 타법)도 오답장에 승계
+    const source = useApp.getState().wordsets.find((w) => w.id === record.wordsetId)
+    const hintOf = new Map(source?.items.map((it) => [it.t, it.h] as const) ?? [])
+    const wrongItems = wrongTargets.map((t) => {
+      const h = hintOf.get(t)
+      return h ? { t, h } : { t }
+    })
+    const ws = await repo.createWordset(`오답 — ${record.wordsetName} (${stamp})`, wrongItems)
     await reloadWordsets()
     select(ws.id)
     enterFullscreenMaybe()

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../../app/store.ts'
 import * as repo from '../../lib/repo.ts'
+import type { WordItem } from '../../lib/types.ts'
 import { downloadJson, parseFileContent, splitText, type SplitMode } from './importText.ts'
 import s from './Editor.module.css'
 
@@ -15,7 +16,7 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
   const existing = useApp((st) => st.wordsets.find((w) => w.id === wordsetId) ?? null)
 
   const [name, setName] = useState(existing?.name ?? '')
-  const [items, setItems] = useState<string[]>(existing?.items ?? [])
+  const [items, setItems] = useState<WordItem[]>(existing?.items ?? [])
   const [dirty, setDirty] = useState(false)
   const [bulk, setBulk] = useState('')
   const [splitMode, setSplitMode] = useState<SplitMode>('line')
@@ -31,13 +32,29 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
     return () => window.removeEventListener('beforeunload', h)
   }, [dirty])
 
-  function mutate(next: string[]) {
+  function mutate(next: WordItem[]) {
     setItems(next)
     setDirty(true)
   }
 
   function addBulk() {
-    const parsed = splitText(bulk, splitMode, eojeolN)
+    let parsed: WordItem[]
+    if (splitMode === 'line') {
+      // 줄 단위에선 "원말 <TAB> 힌트" 표기를 지원
+      parsed = bulk
+        .replace(/\r\n?/g, '\n')
+        .split('\n')
+        .map((line): WordItem | null => {
+          const tab = line.indexOf('\t')
+          const t = (tab >= 0 ? line.slice(0, tab) : line).replace(/\s+/g, ' ').trim()
+          if (!t) return null
+          const h = tab >= 0 ? line.slice(tab + 1).trim() : ''
+          return h ? { t, h } : { t }
+        })
+        .filter((x): x is WordItem => x !== null)
+    } else {
+      parsed = splitText(bulk, splitMode, eojeolN).map((t) => ({ t }))
+    }
     if (!parsed.length) return
     mutate([...items, ...parsed])
     setBulk('')
@@ -45,7 +62,7 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
 
   async function addFiles(files: FileList | File[] | null) {
     if (!files) return
-    const added: string[] = []
+    const added: WordItem[] = []
     for (const file of files) {
       added.push(...parseFileContent(file.name, await file.arrayBuffer()))
       if (!name.trim() && file.name) setName(file.name.replace(/\.[^.]+$/, ''))
@@ -54,7 +71,14 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
   }
 
   function dedupe() {
-    mutate([...new Set(items)])
+    const seen = new Set<string>()
+    mutate(
+      items.filter((it) => {
+        if (seen.has(it.t)) return false
+        seen.add(it.t)
+        return true
+      }),
+    )
   }
 
   function shuffle() {
@@ -67,7 +91,10 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
   }
 
   async function save() {
-    const cleanItems = items.map((x) => x.trim()).filter(Boolean)
+    const cleanItems = items
+      .map((x) => ({ t: x.t.trim(), h: x.h?.trim() || undefined }))
+      .filter((x) => x.t)
+      .map((x) => (x.h ? x : { t: x.t }))
     const finalName = name.trim() || '이름 없는 단어장'
     if (existing) {
       await repo.saveWordset({ ...existing, name: finalName, items: cleanItems, updatedAt: Date.now() })
@@ -122,7 +149,9 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
         }}
       >
         <textarea
-          placeholder={'항목을 붙여넣으세요. 아래 기준으로 잘라서 추가합니다.\n.txt / .csv 파일을 여기로 끌어와도 됩니다 (CP949 인코딩 자동 인식).'}
+          placeholder={
+            '항목을 붙여넣으세요. 아래 기준으로 잘라서 추가합니다.\n"원말 [Tab] 힌트" 로 쓰면 힌트(약어 타법)도 함께 저장됩니다.\n.txt / .csv 파일을 여기로 끌어와도 됩니다 (CP949 인코딩 자동 인식).'
+          }
           value={bulk}
           onChange={(e) => setBulk(e.target.value)}
         />
@@ -193,10 +222,21 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
               <span className={`${s.itemNo} num`}>{i + 1}</span>
               <input
                 type="text"
-                value={item}
+                value={item.t}
                 onChange={(e) => {
                   const next = [...items]
-                  next[i] = e.target.value
+                  next[i] = { ...next[i], t: e.target.value }
+                  mutate(next)
+                }}
+              />
+              <input
+                type="text"
+                className={s.itemHint}
+                placeholder="힌트"
+                value={item.h ?? ''}
+                onChange={(e) => {
+                  const next = [...items]
+                  next[i] = e.target.value ? { ...next[i], h: e.target.value } : { t: next[i].t }
                   mutate(next)
                 }}
               />

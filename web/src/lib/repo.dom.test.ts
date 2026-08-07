@@ -18,9 +18,9 @@ describe('wordsets CRUD', () => {
     let list = await repo.listWordsets()
     expect(list.some((w) => w.id === ws.id)).toBe(true)
 
-    await repo.saveWordset({ ...ws, items: ['가', '나', '다'], updatedAt: Date.now() + 1 })
+    await repo.saveWordset({ ...ws, items: [{ t: '가' }, { t: '나' }, { t: '다' }], updatedAt: Date.now() + 1 })
     const got = await repo.getWordset(ws.id)
-    expect(got?.items).toEqual(['가', '나', '다'])
+    expect(got?.items).toEqual([{ t: '가' }, { t: '나' }, { t: '다' }])
 
     await repo.deleteWordset(ws.id)
     list = await repo.listWordsets()
@@ -44,6 +44,30 @@ describe('wordsets CRUD', () => {
     const got = await repo.getWordset(ws.id)
     expect(performance.now() - t0).toBeLessThan(2000)
     expect(got?.items.length).toBe(10_000)
+    await repo.deleteWordset(ws.id)
+  })
+})
+
+describe('items 정규화 (힌트·레거시 호환)', () => {
+  it('레거시 string[] 저장분도 읽을 때 {t}로 정규화', async () => {
+    const db = await getDB()
+    const legacy = {
+      id: 'legacy-1',
+      name: '레거시',
+      items: ['가', '나'] as never,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    await db.put('wordsets', legacy)
+    const got = await repo.getWordset('legacy-1')
+    expect(got?.items).toEqual([{ t: '가' }, { t: '나' }])
+    await repo.deleteWordset('legacy-1')
+  })
+
+  it('힌트 보존 왕복', async () => {
+    const ws = await repo.createWordset('힌트', [{ t: '것도', h: 'ㄱㅅ-ㄷ' }, '평문'])
+    const got = await repo.getWordset(ws.id)
+    expect(got?.items).toEqual([{ t: '것도', h: 'ㄱㅅ-ㄷ' }, { t: '평문' }])
     await repo.deleteWordset(ws.id)
   })
 })

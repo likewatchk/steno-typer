@@ -1,4 +1,5 @@
-/** 파일/텍스트 가져오기 — 인코딩 방어 + 분할 규칙 */
+/** 파일/텍스트 가져오기 — 인코딩 방어 + 분할 규칙 + 힌트 지원 */
+import { toWordItem, type WordItem } from '../../lib/types.ts'
 
 /**
  * 국내 .txt 는 CP949(EUC-KR)가 흔하다.
@@ -54,22 +55,67 @@ function firstCsvCell(line: string): string {
   return out
 }
 
-export function parseFileContent(fileName: string, buf: ArrayBuffer): string[] {
+/** 두 번째 CSV 셀 (힌트용) — 없으면 undefined */
+function secondCsvCell(line: string): string | undefined {
+  // 첫 셀을 걷어낸 나머지에서 첫 번째 셀만 다시 취한다 (간단 파서)
+  let rest: string
+  if (line.startsWith('"')) {
+    let i = 1
+    for (; i < line.length; i++) {
+      if (line[i] === '"') {
+        if (line[i + 1] === '"') i++
+        else break
+      }
+    }
+    rest = line.slice(i + 1)
+  } else {
+    const comma = line.indexOf(',')
+    rest = comma < 0 ? '' : line.slice(comma)
+  }
+  if (!rest.startsWith(',')) return undefined
+  const cell = firstCsvCell(rest.slice(1)).trim()
+  return cell || undefined
+}
+
+/**
+ * 파일 → 항목. 힌트 지원:
+ * - .csv: 1열 = 원말, 2열 = 힌트
+ * - .txt: 탭으로 "원말<TAB>힌트" 표기 시 힌트 인식
+ */
+export function parseFileContent(fileName: string, buf: ArrayBuffer): WordItem[] {
   const text = decodeTextBuffer(buf)
   if (/\.csv$/i.test(fileName)) {
     return text
       .replace(/\r\n?/g, '\n')
       .split('\n')
-      .map((l) => firstCsvCell(l).trim())
-      .filter(Boolean)
+      .map((l) => {
+        const t = firstCsvCell(l).trim()
+        if (!t) return null
+        const h = secondCsvCell(l)
+        return h ? { t, h } : { t }
+      })
+      .filter((x): x is WordItem => x !== null)
   }
-  return splitText(text, 'line')
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => {
+      const tab = line.indexOf('\t')
+      if (tab >= 0) {
+        const t = line.slice(0, tab).replace(/\s+/g, ' ').trim()
+        const h = line.slice(tab + 1).trim()
+        return t ? (h ? { t, h } : { t }) : null
+      }
+      const t = line.replace(/\s+/g, ' ').trim()
+      return t ? { t } : null
+    })
+    .filter((x): x is WordItem => x !== null)
 }
 
 /** 단어장 JSON 내보내기 형식 */
 export interface WordsetExport {
   name: string
-  items: string[]
+  items: WordItem[]
 }
 
 export function parseWordsetJson(text: string): WordsetExport[] {
@@ -81,7 +127,18 @@ export function parseWordsetJson(text: string): WordsetExport[] {
     const name = typeof obj.name === 'string' && obj.name.trim() ? obj.name.trim() : '가져온 단어장'
     const rawItems = obj.items
     if (!Array.isArray(rawItems)) throw new Error('items 배열이 없습니다')
-    const items = rawItems.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).filter(Boolean)
+    const items = rawItems
+      .map((x): WordItem | null => {
+        if (typeof x === 'string') return x.trim() ? { t: x.trim() } : null
+        if (typeof x === 'object' && x !== null) {
+          const o = x as Record<string, unknown>
+          const t = typeof o.t === 'string' ? o.t : typeof o.text === 'string' ? o.text : ''
+          const h = typeof o.h === 'string' ? o.h : typeof o.hint === 'string' ? o.hint : undefined
+          return t.trim() ? toWordItem({ t: t.trim(), h: h?.trim() || undefined }) : null
+        }
+        return null
+      })
+      .filter((x): x is WordItem => x !== null)
     return { name, items }
   })
 }
