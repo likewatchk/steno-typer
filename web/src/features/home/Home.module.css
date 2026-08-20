@@ -266,6 +266,22 @@
   font-size: 16px;
 }
 
+.resumeBtn {
+  padding: 10px;
+  font-size: 14px;
+  border-color: var(--accent);
+  color: var(--accent);
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.resumeMeta {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
 .scoringBox {
   border: 1px solid var(--border);
   border-radius: var(--radius);

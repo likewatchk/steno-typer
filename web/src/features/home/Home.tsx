@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../../app/store.ts'
 import { cycleTheme, getThemePref } from '../../lib/theme.ts'
 import { initSound } from '../../lib/sound.ts'
@@ -6,7 +6,7 @@ import * as repo from '../../lib/repo.ts'
 import { syncNow } from '../../lib/sync.ts'
 import { parseFileContent, parseWordsetJson } from '../wordset/importText.ts'
 import { computeDuration } from '../../lib/scheduler.ts'
-import type { RangeSpec, SessionRecord, Settings } from '../../lib/types.ts'
+import type { RangeSpec, ResumeState, SessionRecord, Settings } from '../../lib/types.ts'
 import s from './Home.module.css'
 
 const THEME_LABEL = { system: '테마: 시스템', light: '테마: 라이트', dark: '테마: 다크' } as const
@@ -65,7 +65,22 @@ export default function Home() {
   const [tab, setTab] = useState<'all' | 'normal' | 'abbr'>('all')
   const [themeLabel, setThemeLabel] = useState(() => THEME_LABEL[getThemePref()])
   const [syncState, setSyncState] = useState<'idle' | 'busy' | string>('idle')
+  const [resume, setResume] = useState<ResumeState | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // 선택 단어장의 이어하기 존재 여부 (선택 변경·홈 복귀 시 조회)
+  useEffect(() => {
+    let stale = false
+    setResume(null)
+    if (selectedId) {
+      void repo.getResume(selectedId).then((r) => {
+        if (!stale) setResume(r ?? null)
+      })
+    }
+    return () => {
+      stale = true
+    }
+  }, [selectedId])
 
   const selected = wordsets.find((w) => w.id === selectedId) ?? null
   const isAbbr = (name: string) => name.startsWith('약어') || name.startsWith('오답 — 약어')
@@ -618,6 +633,21 @@ export default function Home() {
               <button className={`primary ${s.start}`} disabled={!canStart} onClick={onStart}>
                 연습 시작
               </button>
+              {resume && (
+                <button
+                  className={s.resumeBtn}
+                  onClick={() => {
+                    initSound()
+                    if (settings.fullscreen && !document.fullscreenElement) {
+                      void document.documentElement.requestFullscreen?.().catch(() => {})
+                    }
+                    useApp.getState().startPracticeResume(resume)
+                  }}
+                >
+                  이어서 시작 — <span className="num">{resume.index + 1} / {resume.items.length}</span>
+                  <span className={s.resumeMeta}>{fmtDate(resume.savedAt)} 저장</span>
+                </button>
+              )}
             </>
           ) : (
             <p className={s.empty}>왼쪽에서 단어장을 선택하거나 새로 만드세요.</p>

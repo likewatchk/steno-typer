@@ -6,6 +6,7 @@ import { getDB, newId } from './db.ts'
 import {
   DEFAULT_SETTINGS,
   toWordItem,
+  type ResumeState,
   type SessionRecord,
   type Settings,
   type WordInput,
@@ -63,6 +64,20 @@ export async function clearPendingDeletes(ids: string[]): Promise<void> {
     pending.filter((x) => !ids.includes(x)),
     'pendingDeletes',
   )
+}
+
+// ---------- 이어하기 (로컬 전용 — 동기화 대상 아님) ----------
+
+export async function getResume(wordsetId: string): Promise<ResumeState | undefined> {
+  return (await (await getDB()).get('meta', `resume:${wordsetId}`)) as ResumeState | undefined
+}
+
+export async function saveResume(state: ResumeState): Promise<void> {
+  await (await getDB()).put('meta', state, `resume:${state.wordsetId}`)
+}
+
+export async function deleteResume(wordsetId: string): Promise<void> {
+  await (await getDB()).delete('meta', `resume:${wordsetId}`)
 }
 
 /** 동기화 응답 스냅샷으로 로컬 미러 전체 교체 (단일 트랜잭션) */

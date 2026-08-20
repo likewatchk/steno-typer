@@ -104,6 +104,45 @@ describe('settings', () => {
   })
 })
 
+describe('이어하기 (resume)', () => {
+  const mkResume = (wid: string, index: number) => ({
+    wordsetId: wid,
+    wordsetName: '테스트',
+    items: [
+      { text: '가나', sourceIndex: 0 },
+      { text: '다라', sourceIndex: 1 },
+      { text: '마바', sourceIndex: 2 },
+    ],
+    index,
+    settings: DEFAULT_SETTINGS,
+    typing: { kind: 'continuous' as const, fullText: '가나다', boundaries: [2] },
+    savedAt: Date.now(),
+  })
+
+  it('저장 → 조회 → 덮어쓰기 → 삭제 왕복', async () => {
+    await repo.saveResume(mkResume('rw1', 1))
+    let got = await repo.getResume('rw1')
+    expect(got?.index).toBe(1)
+    expect(got?.typing).toEqual({ kind: 'continuous', fullText: '가나다', boundaries: [2] })
+
+    await repo.saveResume(mkResume('rw1', 2)) // 덮어쓰기
+    got = await repo.getResume('rw1')
+    expect(got?.index).toBe(2)
+
+    await repo.deleteResume('rw1')
+    expect(await repo.getResume('rw1')).toBeUndefined()
+  })
+
+  it('단어장별 독립 슬롯', async () => {
+    await repo.saveResume(mkResume('rwA', 0))
+    await repo.saveResume(mkResume('rwB', 2))
+    expect((await repo.getResume('rwA'))?.index).toBe(0)
+    expect((await repo.getResume('rwB'))?.index).toBe(2)
+    await repo.deleteResume('rwA')
+    await repo.deleteResume('rwB')
+  })
+})
+
 describe('sessions', () => {
   it('저장 → 최근 목록 (startedAt 내림차순, limit)', async () => {
     const mk = (i: number): SessionRecord => ({

@@ -22,6 +22,8 @@ beforeEach(async () => {
   await act(async () => {
     await useApp.getState().init()
   })
+  // 싱글턴 스토어 — 이전 테스트 실패 시 화면 오염 방지
+  useApp.setState({ screen: { name: 'home' }, plan: null, resumeFrom: null })
 })
 
 afterEach(() => {
@@ -72,7 +74,7 @@ describe('앱 통합 스모크', () => {
     clickByText('연습 시작')
     await act(async () => {}) // 엔진 마운트 flush
     expect(useApp.getState().screen.name).toBe('practice')
-    expect(text()).toContain('Space 일시정지') // 보기 모드 힌트
+    expect(text()).toContain('일시정지') // 보기 모드 힌트
 
     // Esc → 일시정지 메뉴
     act(() => {

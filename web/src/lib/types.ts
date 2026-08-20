@@ -22,6 +22,15 @@ export interface Wordset {
   updatedAt: number
 }
 
+/** 연습 엔진에 태워지는 항목 (scheduler 가 재수출) */
+export interface EngineItem {
+  text: string
+  /** 약어 타법 등 표시 전용 힌트 */
+  hint?: string
+  /** 원본 단어장에서의 0-기반 위치 (오답 단어장 생성용) */
+  sourceIndex: number
+}
+
 export type RangeSpec =
   | { kind: 'all' }
   | { kind: 'span'; from: number; to: number } // 1-기반, 양끝 포함
@@ -101,6 +110,24 @@ export const DEFAULT_SETTINGS: Settings = {
   hintDelayMs: 1000,
   scoring: { ignoreSpace: true, ignorePunct: false, unit: 'syllable', inputStyle: 'continuous', profile: 'custom' },
   syncToken: '',
+}
+
+/**
+ * 이어하기 스냅샷 — 연습을 중간 종료할 때 저장 (단어장별 1개, 로컬 전용).
+ * items 를 통째로 저장하므로 이후 단어장이 편집돼도 이어하기가 깨지지 않는다.
+ */
+export interface ResumeState {
+  wordsetId: string
+  wordsetName: string
+  items: EngineItem[]
+  /** 다시 시작할 항목 인덱스 (0-기반) */
+  index: number
+  /** 세션에 쓰던 설정 그대로 재개 */
+  settings: Settings
+  typing?:
+    | { kind: 'continuous'; fullText: string; boundaries: number[] }
+    | { kind: 'discrete'; answers: string[] }
+  savedAt: number
 }
 
 /** 항목별 채점 결과 */

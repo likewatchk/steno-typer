@@ -20,8 +20,17 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
+  height: 6px;
   background: var(--border);
+  /* 일시정지 스크럽 시 오버레이 위에서도 만질 수 있게 */
+  z-index: 7;
+}
+
+/* 터치 히트 영역 확장 (시각적 두께는 6px 유지) */
+.barTrack::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0 -14px 0;
 }
 
 .barFill {
@@ -30,6 +39,65 @@
   transform-origin: left;
   transform: scaleX(0);
   will-change: transform;
+}
+
+/* 일시정지 중 위치 핸들 — left 갱신은 정지 상태에서만 일어나므로 레이아웃 비용 무해 */
+.barHandle {
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-elev);
+  display: none;
+  pointer-events: none;
+}
+
+.scrubbable .barHandle {
+  display: block;
+}
+
+.scrubbable {
+  cursor: pointer;
+}
+
+.pauseBtn {
+  position: absolute;
+  top: 14px;
+  right: 84px;
+  z-index: 6;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elev) 80%, transparent);
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-dim);
+}
+
+.pauseBtn:hover {
+  color: var(--text);
+}
+
+.stepRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stepPos {
+  min-width: 90px;
+  text-align: center;
+  font-size: 15px;
+}
+
+.stepHint {
+  color: var(--text-dim);
+  font-size: 12px;
 }
 
 .counter {

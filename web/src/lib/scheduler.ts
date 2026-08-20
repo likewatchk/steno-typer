@@ -6,15 +6,9 @@
  * setInterval 드리프트가 원천적으로 없고, rAF 는 바깥(러너)에서 붙인다.
  * 루프 경로에 힙 할당 없음 — 이벤트 배열은 시작 시 1회 생성.
  */
-import { toWordItem, type RangeSpec, type Settings, type WordInput } from './types.ts'
+import { toWordItem, type EngineItem, type RangeSpec, type Settings, type WordInput } from './types.ts'
 
-export interface EngineItem {
-  text: string
-  /** 약어 타법 등 표시 전용 힌트 */
-  hint?: string
-  /** 원본 단어장에서의 0-기반 위치 (오답 단어장 생성용) */
-  sourceIndex: number
-}
+export type { EngineItem }
 
 export interface TimelineConfig {
   durationMode: 'auto' | 'fixed'
@@ -61,6 +55,9 @@ export class FlashTimeline {
   private _running = false
   private practiceStart = 0
   private practiceTotal = 1
+  /** 항목별 show 절대시각·이벤트 인덱스 — 시킹/진행바 매핑용 (생성 시 1회 산출) */
+  private showTimes: number[] = []
+  private showEventIdx: number[] = []
   readonly durations: number[]
 
   constructor(
@@ -79,6 +76,8 @@ export class FlashTimeline {
     }
     this.practiceStart = t
     for (let i = 0; i < items.length; i++) {
+      this.showTimes.push(t)
+      this.showEventIdx.push(this.events.length)
       this.events.push({ t, kind: 1, index: i })
       t += this.durations[i]
       if (i < items.length - 1) {
@@ -97,6 +96,53 @@ export class FlashTimeline {
   /** 카운트다운 제외 총 연습 시간 (일시정지 무관 — 타임라인은 고정 길이) */
   get practiceMs(): number {
     return this.practiceTotal
+  }
+
+  get itemCount(): number {
+    return this.items.length
+  }
+
+  /** 항목 → 진행률 (진행바 핸들 위치) */
+  showFraction(index: number): number {
+    const i = Math.max(0, Math.min(index, this.items.length - 1))
+    const f = (this.showTimes[i] - this.practiceStart) / this.practiceTotal
+    return f < 0 ? 0 : f > 1 ? 1 : f
+  }
+
+  /** 진행률 → 가장 가까운 항목 (진행바 스크럽 → 항목 스냅) */
+  indexAtFraction(frac: number): number {
+    const target = this.practiceStart + Math.max(0, Math.min(1, frac)) * this.practiceTotal
+    // showTimes 는 오름차순 — target 이하의 마지막 항목을 이진탐색
+    let lo = 0
+    let hi = this.showTimes.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if (this.showTimes[mid] <= target) lo = mid
+      else hi = mid - 1
+    }
+    // 다음 항목 쪽이 더 가까우면 스냅
+    if (lo < this.showTimes.length - 1 && this.showTimes[lo + 1] - target < target - this.showTimes[lo]) {
+      return lo + 1
+    }
+    return lo
+  }
+
+  /**
+   * k번째 항목의 show 시각으로 점프. 일시정지 중에도 동작하며 onShow/onProgress 를
+   * 즉시 발화해 화면을 갱신한다 (paused 면 tick 이 돌지 않으므로).
+   * 기준시각 재계산: 재개(또는 지금) 시점의 elapsed 가 정확히 그 항목의 show 시각이 되도록.
+   */
+  seekTo(index: number, now: number): void {
+    if (this.items.length === 0) return
+    const i = Math.max(0, Math.min(index, this.items.length - 1))
+    const t = this.showTimes[i]
+    const anchor = this._paused ? this.pauseStartedWall : now
+    this.startWall = anchor - this.pausedTotal - t
+    this.ptr = this.showEventIdx[i] + 1 // show 는 아래에서 직접 발화
+    this._running = true // 완료 직전/직후에도 재개 가능
+    this.currentIndex = i
+    this.hooks.onShow(i)
+    this.hooks.onProgress(this.showFraction(i))
   }
 
   get paused(): boolean {

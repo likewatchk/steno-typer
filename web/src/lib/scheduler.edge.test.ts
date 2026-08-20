@@ -128,6 +128,81 @@ describe('FlashTimeline 엣지', () => {
     expect(tl.durations[1]).toBe(600 + 180 * 10) // 2400
   })
 
+  it('seekTo 전진: 점프 후 이벤트가 그 지점부터 연속', () => {
+    const { log, hooks } = collect()
+    const tl = new FlashTimeline(items(5), cfg(), hooks) // show@0,1150,2300,3450,4600
+    tl.start(0)
+    tl.tick(100) // show0
+    tl.seekTo(3, 100) // 즉시 show3 발화
+    expect(log).toEqual(['show0', 'show3'])
+    // 지금(100)이 show3 시각 — 1000ms 뒤 blank3, 1150ms 뒤 show4
+    tl.tick(1100)
+    tl.tick(1300)
+    tl.tick(9999)
+    expect(log).toEqual(['show0', 'show3', 'blank3', 'show4', 'done'])
+  })
+
+  it('seekTo 후진: 같은 항목들이 다시 재생', () => {
+    const { log, hooks } = collect()
+    const tl = new FlashTimeline(items(3), cfg(), hooks)
+    tl.start(0)
+    tl.tick(1200) // show0 blank0 show1
+    tl.seekTo(0, 1200)
+    tl.tick(1200 + 1000) // blank0
+    tl.tick(1200 + 1150) // show1
+    expect(log).toEqual(['show0', 'blank0', 'show1', 'show0', 'blank0', 'show1'])
+  })
+
+  it('일시정지 중 seekTo → 화면 즉시 갱신 + 재개 후 타이밍 정확', () => {
+    const { log, hooks } = collect()
+    const tl = new FlashTimeline(items(4), cfg(), hooks)
+    tl.start(0)
+    tl.tick(100) // show0
+    tl.pause(200)
+    tl.seekTo(2, 5000) // 정지 중 이동 — show2 즉시
+    expect(log).toEqual(['show0', 'show2'])
+    tl.resume(10000)
+    // 재개 시점의 elapsed == show2 시각 → 1000ms 뒤 blank2
+    tl.tick(10999)
+    expect(log).toEqual(['show0', 'show2'])
+    tl.tick(11000)
+    expect(log).toEqual(['show0', 'show2', 'blank2'])
+  })
+
+  it('done 직전 seekTo 로 세션 연장 가능', () => {
+    const { log, hooks } = collect()
+    const tl = new FlashTimeline(items(2), cfg(), hooks)
+    tl.start(0)
+    tl.tick(9999) // 완주
+    expect(tl.running).toBe(false)
+    tl.seekTo(1, 20000)
+    expect(tl.running).toBe(true)
+    tl.tick(20000 + 1000)
+    expect(log[log.length - 1]).toBe('done')
+  })
+
+  it('showFraction ↔ indexAtFraction 왕복 + 경계 스냅', () => {
+    const tl = new FlashTimeline(items(10), cfg(), collect().hooks)
+    for (let i = 0; i < 10; i++) {
+      expect(tl.indexAtFraction(tl.showFraction(i))).toBe(i)
+    }
+    expect(tl.indexAtFraction(0)).toBe(0)
+    expect(tl.indexAtFraction(1)).toBe(9)
+    expect(tl.indexAtFraction(-0.5)).toBe(0)
+    expect(tl.indexAtFraction(1.5)).toBe(9)
+  })
+
+  it('seekTo 범위 클램프', () => {
+    const { log, hooks } = collect()
+    const tl = new FlashTimeline(items(3), cfg(), hooks)
+    tl.start(0)
+    tl.seekTo(-5, 0)
+    expect(tl.currentIndex).toBe(0)
+    tl.seekTo(99, 0)
+    expect(tl.currentIndex).toBe(2)
+    expect(log.filter((l) => l.startsWith('show')).length).toBeGreaterThanOrEqual(2)
+  })
+
   it('불규칙한 tick 간격(지터)에도 이벤트 순서·개수 보존', () => {
     const { log, hooks } = collect()
     const tl = new FlashTimeline(items(20), cfg({ blankMs: 50, fixedMs: 300 }), hooks)

@@ -9,9 +9,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../../app/store.ts'
 import { computeFitSizes, type FitResult } from '../../lib/fit.ts'
 import { newId } from '../../lib/db.ts'
+import * as repo from '../../lib/repo.ts'
 import { playTick } from '../../lib/sound.ts'
 import { FlashTimeline, type TimelineConfig } from '../../lib/scheduler.ts'
-import type { SessionRecord } from '../../lib/types.ts'
+import type { ResumeState, SessionRecord } from '../../lib/types.ts'
 import StenoInput, { type StenoInputHandle } from '../typing/StenoInput.tsx'
 import { setDiagEnabled } from '../typing/diagnostics.ts'
 import { simulateBurst, simulateIme, simulatePaste } from '../typing/simulator.ts'
@@ -32,6 +33,7 @@ export const SCORING_WATCHDOG = { ms: 8000 }
 export default function Practice() {
   const plan = useApp((st) => st.plan)
   const [overlay, setOverlayState] = useState<Overlay>(null)
+  const [pos, setPos] = useState(0) // 일시정지 메뉴의 현재 위치 표시 (정지 중에만 갱신)
   const overlayRef = useRef<Overlay>(null)
   const setOverlay = (o: Overlay) => {
     overlayRef.current = o
@@ -41,6 +43,8 @@ export default function Practice() {
   const stageRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
+  const trackRef = useRef<HTMLDivElement>(null)
+  const handleRef = useRef<HTMLDivElement>(null)
   const counterRef = useRef<HTMLDivElement>(null)
   const cdRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
@@ -50,10 +54,17 @@ export default function Practice() {
 
   const engineRef = useRef<FlashTimeline | null>(null)
   const doneStatsRef = useRef({ count: 0, ms: 0 })
+  // 이펙트 내부 함수를 JSX 핸들러에 노출하기 위한 다리
+  const seekRef = useRef<((index: number) => void) | null>(null)
+  const pauseRef = useRef<(() => void) | null>(null)
+  const saveResumeRef = useRef<(() => void) | null>(null)
 
-  // 마운트 시점 스냅샷 (세션 중 설정 변경 없음)
-  const snapRef = useRef<{ settings: ReturnType<typeof useApp.getState>['settings'] } | null>(null)
-  snapRef.current ??= { settings: useApp.getState().settings }
+  // 마운트 시점 스냅샷 — 이어하기면 저장해 둔 설정 그대로 재개
+  const snapRef = useRef<{ settings: ReturnType<typeof useApp.getState>['settings']; resume: ResumeState | null } | null>(null)
+  snapRef.current ??= (() => {
+    const st = useApp.getState()
+    return { settings: st.resumeFrom?.settings ?? st.settings, resume: st.resumeFrom }
+  })()
   const settings = snapRef.current.settings
   const typing = settings.mode === 'typing'
   const noFade = settings.safeMode
@@ -82,6 +93,15 @@ export default function Practice() {
     // 실시간 표시 — 설정 토글, 안전 모드에선 강제 끔
     const liveStats = typing && settings.liveStats && !settings.safeMode
     let finished = false
+    // 시킹이 일어나면 실시간 증분 채점(전진 전용 커서)을 끊고 최종은 batch 로
+    let brokeLive = false
+
+    // ---- 이어하기 복원 준비 ----
+    const resumeState = snapRef.current!.resume
+    const resumeIdx =
+      resumeState && resumeState.wordsetId === plan.wordset.id
+        ? Math.max(0, Math.min(resumeState.index, items.length - 1))
+        : 0
 
     const cfg: TimelineConfig = {
       durationMode: settings.durationMode,
@@ -92,7 +112,8 @@ export default function Practice() {
       autoMaxMs: settings.autoMaxMs,
       autoSpeed: settings.autoSpeed,
       blankMs: settings.blankMs,
-      countdownMs: settings.countdown ? 3000 : 0,
+      // 이어하기는 엔진 카운트다운 대신 UI 카운트다운 후 seek (아래 begin 참조)
+      countdownMs: settings.countdown && resumeIdx === 0 ? 3000 : 0,
     }
 
     const sound = settings.sound && !settings.safeMode
@@ -111,6 +132,7 @@ export default function Practice() {
       if (finalized) return
       finalized = true
       window.clearTimeout(watchdog)
+      void repo.deleteResume(plan!.wordset.id) // 완주 — 이어하기 소멸
       const record: SessionRecord = {
         id: newId(),
         wordsetId: plan!.wordset.id,
@@ -186,7 +208,7 @@ export default function Practice() {
       if (!typing || !input) return
       if (continuous) {
         boundaries[prevIndex] = input.value().length
-        if (liveStats && worker) {
+        if (liveStats && worker && !brokeLive) {
           const msg: WorkerIn = {
             kind: 'live-step',
             fullText: input.value(),
@@ -198,7 +220,7 @@ export default function Practice() {
         }
       } else {
         answers[prevIndex] = input.takeAndClear()
-        if (liveStats && worker) {
+        if (liveStats && worker && !brokeLive) {
           const msg: WorkerIn = {
             kind: 'live-discrete-step',
             target: texts[prevIndex],
@@ -236,7 +258,7 @@ export default function Practice() {
         return
       }
       const msg: WorkerIn =
-        continuous && liveStats
+        continuous && liveStats && !brokeLive
           ? { kind: 'live-final', fullText: finalReq.mode === 'continuous' ? finalReq.fullText : '', boundaries: boundaries.slice(), elapsedMs }
           : { kind: 'batch', req: finalReq }
       worker.postMessage(msg)
@@ -295,6 +317,7 @@ export default function Practice() {
         if (el) el.style.opacity = '0'
         if (typing) finishTyping()
         else {
+          void repo.deleteResume(plan!.wordset.id) // 완주 — 이어하기 소멸
           doneStatsRef.current = { count: items.length, ms: tl.practiceMs }
           setOverlay('done')
         }
@@ -311,29 +334,138 @@ export default function Practice() {
       }
     }
 
-    // ---- rAF 러너 ----
+    // ---- 이어하기: 타이핑 입력 복원 (엔진 시작 전에) ----
+    if (resumeState && resumeIdx > 0 && typing && resumeState.typing) {
+      const el = inputRef.current?.el()
+      if (resumeState.typing.kind === 'continuous' && continuous && el) {
+        el.value = resumeState.typing.fullText
+        boundaries.push(...resumeState.typing.boundaries)
+      } else if (resumeState.typing.kind === 'discrete' && !continuous) {
+        answers.push(...resumeState.typing.answers)
+      }
+    }
+
+    // ---- 진행바 핸들 (일시정지 중에만 보임 — left 갱신은 정지 상태라 레이아웃 비용 무해) ----
+    const updateHandle = (idx: number) => {
+      if (handleRef.current) handleRef.current.style.left = `${tl.showFraction(idx) * 100}%`
+    }
+
+    // ---- 위치 이동 (일시정지 중 전용) ----
+    function doSeek(target: number) {
+      if (finished) return
+      const idx = Math.max(0, Math.min(target, items.length - 1))
+      if (typing) {
+        const input = inputRef.current
+        if (input?.isComposing()) return // IME 조합 중엔 이동 금지 (조합 파괴 방지)
+        brokeLive = true
+        if (liveRef.current) liveRef.current.textContent = ''
+        if (continuous) {
+          if (idx <= boundaries.length) {
+            // 되감기: 이동 지점 이후 입력·경계 삭제 (그 구간을 다시 친다 — 확정 스펙)
+            boundaries.length = idx
+            const keep = idx > 0 ? boundaries[idx - 1] : 0
+            const el = input?.el()
+            if (el) el.value = el.value.slice(0, keep)
+          } else {
+            // 앞으로 스킵: 건너뛴 항목 경계를 현재 길이로 기록 (빈 구간 = 누락 채점)
+            const len = input?.value().length ?? 0
+            while (boundaries.length < idx) boundaries.push(len)
+          }
+        } else {
+          if (idx <= answers.length) answers.length = idx
+          else while (answers.length < idx) answers.push('')
+          input?.clear()
+        }
+      }
+      tl.seekTo(idx, performance.now())
+      setPos(idx)
+      updateHandle(idx)
+    }
+    seekRef.current = doSeek
+
+    // ---- 이어하기 저장 (종료·이탈 시) ----
+    function saveResumeNow() {
+      if (finished || finalized) return
+      const index = Math.max(0, tl.currentIndex)
+      const state: ResumeState = {
+        wordsetId: plan!.wordset.id,
+        wordsetName: plan!.wordset.name,
+        items,
+        index,
+        settings,
+        typing: typing
+          ? continuous
+            ? {
+                kind: 'continuous',
+                fullText: inputRef.current?.value() ?? '',
+                boundaries: boundaries.slice(0, Math.min(boundaries.length, index)),
+              }
+            : { kind: 'discrete', answers: answers.slice(0, index) }
+          : undefined,
+        savedAt: Date.now(),
+      }
+      void repo.saveResume(state)
+    }
+    saveResumeRef.current = saveResumeNow
+
+    // ---- rAF 러너 + 시작 (이어하기는 UI 카운트다운 후 seek) ----
     let raf = 0
+    let resumeCdTimer = 0
     const loop = () => {
       tl.tick(performance.now())
       if (tl.running) raf = requestAnimationFrame(loop)
     }
-    tl.start(performance.now())
-    raf = requestAnimationFrame(loop)
-
-    // 시작 시 1회만 포커스 (세션 중 프로그램적 refocus 금지)
-    if (typing) inputRef.current?.focus()
+    const begin = () => {
+      const now = performance.now()
+      tl.start(now)
+      if (resumeIdx > 0) {
+        tl.seekTo(resumeIdx, now)
+        setPos(resumeIdx)
+      }
+      raf = requestAnimationFrame(loop)
+      // 시작 시 1회만 포커스 (세션 중 프로그램적 refocus 금지)
+      if (typing) inputRef.current?.focus()
+    }
+    if (resumeIdx > 0 && settings.countdown) {
+      // 이어하기 카운트다운은 UI 로 (엔진 countdownMs 는 0)
+      let n = 3
+      const cd = cdRef.current
+      if (cd) cd.textContent = String(n)
+      resumeCdTimer = window.setInterval(() => {
+        n -= 1
+        if (n > 0) {
+          if (cd) cd.textContent = String(n)
+          if (sound) playTick()
+        } else {
+          window.clearInterval(resumeCdTimer)
+          if (cd) cd.textContent = ''
+          begin()
+        }
+      }, 1000)
+    } else {
+      begin()
+    }
 
     const pauseWithOverlay = (kind: Overlay) => {
       if (!tl.running || tl.paused || finished) return
       tl.pause(performance.now())
+      setPos(Math.max(0, tl.currentIndex))
+      updateHandle(Math.max(0, tl.currentIndex))
       setOverlay(kind)
     }
+    pauseRef.current = () => pauseWithOverlay('menu')
 
     const onKey = (e: KeyboardEvent) => {
       if (finished) return
       if (e.key === 'Escape') {
         // 어느 모드든 Esc = 일시정지 메뉴 (열려 있으면 재개는 버튼으로)
         if (overlayRef.current === null) pauseWithOverlay('menu')
+        return
+      }
+      // 일시정지 메뉴에서 ←/→ = 한 항목씩 이동
+      if (overlayRef.current === 'menu' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault()
+        doSeek((engineRef.current?.currentIndex ?? 0) + (e.key === 'ArrowRight' ? 1 : -1))
         return
       }
       // 보기 모드 전용 Space — 타이핑 모드에선 문자 키를 절대 건드리지 않는다
@@ -343,20 +475,29 @@ export default function Practice() {
       }
     }
     const onVis = () => {
-      if (document.hidden && overlayRef.current === null) pauseWithOverlay('menu')
+      if (!document.hidden) return
+      saveResumeNow() // 앱 전환·탭 숨김 — 진행 자동 저장
+      if (overlayRef.current === null) pauseWithOverlay('menu')
     }
+    const onPageHide = () => saveResumeNow() // 탭 닫기·새로고침
     window.addEventListener('keydown', onKey)
     document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('pagehide', onPageHide)
 
     return () => {
       window.removeEventListener('keydown', onKey)
       document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('pagehide', onPageHide)
       cancelAnimationFrame(raf)
+      window.clearInterval(resumeCdTimer)
       tl.stop()
       window.clearTimeout(watchdog)
       window.clearTimeout(hintTimer)
       worker?.terminate()
       worker = null
+      seekRef.current = null
+      pauseRef.current = null
+      saveResumeRef.current = null
       if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => {})
     }
     // 마운트 1회 세션 — plan/설정은 스냅샷 고정, planSeq 키로 리마운트
@@ -374,7 +515,21 @@ export default function Practice() {
   }
 
   function quit() {
+    saveResumeRef.current?.() // 중간 종료 — 진행 저장 (완주면 내부에서 무시)
     useApp.getState().finishPractice(null)
+  }
+
+  function onTrackPointer(e: React.PointerEvent<HTMLDivElement>) {
+    // 일시정지 중에만 스크럽 (확정 스펙)
+    if (overlayRef.current !== 'menu') return
+    if (e.type === 'pointerdown') e.currentTarget.setPointerCapture?.(e.pointerId)
+    else if (e.buttons === 0) return // move 인데 누른 상태가 아니면 무시
+    const rect = e.currentTarget.getBoundingClientRect()
+    const frac = (e.clientX - rect.left) / rect.width
+    const tl = engineRef.current
+    if (!tl) return
+    const idx = tl.indexAtFraction(frac)
+    if (idx !== tl.currentIndex) seekRef.current?.(idx)
   }
 
   function retrySame() {
@@ -384,10 +539,27 @@ export default function Practice() {
 
   return (
     <div ref={stageRef} className={s.stage}>
-      <div className={s.barTrack}>
+      <div
+        ref={trackRef}
+        className={`${s.barTrack} ${overlay === 'menu' ? s.scrubbable : ''}`}
+        onPointerDown={onTrackPointer}
+        onPointerMove={onTrackPointer}
+      >
         <div ref={barRef} className={s.barFill} />
+        <div ref={handleRef} className={s.barHandle} />
       </div>
       <div ref={counterRef} className={`${s.counter} num`} />
+      {overlay === null && (
+        <button
+          className={s.pauseBtn}
+          tabIndex={-1}
+          aria-label="일시정지"
+          onMouseDown={(e) => e.preventDefault() /* 타이핑 포커스 유지 — 방어 규칙 9 */}
+          onClick={() => pauseRef.current?.()}
+        >
+          ⏸
+        </button>
+      )}
       {typing && settings.liveStats && !settings.safeMode && (
         <div ref={liveRef} className={`${s.liveStats} num`} />
       )}
@@ -419,7 +591,7 @@ export default function Practice() {
         </div>
       )}
 
-      <div className={s.escHint}>{typing ? 'Esc 일시정지' : 'Space 일시정지 · Esc 메뉴'}</div>
+      <div className={s.escHint}>{typing ? '⏸ 버튼·Esc 일시정지' : 'Space·⏸ 일시정지'}</div>
 
       {import.meta.env.DEV && typing && (
         <div className={s.simPanel}>
@@ -432,11 +604,19 @@ export default function Practice() {
       {overlay === 'menu' && (
         <div className={s.overlay}>
           <div className={s.overlayTitle}>일시정지</div>
+          <div className={s.stepRow}>
+            <button onClick={() => seekRef.current?.((engineRef.current?.currentIndex ?? 0) - 1)}>◀ 이전</button>
+            <span className={`${s.stepPos} num`}>
+              {pos + 1} / {plan.items.length}
+            </span>
+            <button onClick={() => seekRef.current?.((engineRef.current?.currentIndex ?? 0) + 1)}>다음 ▶</button>
+          </div>
+          <div className={s.stepHint}>←/→ 키 또는 상단 진행바를 눌러 시작 위치 조정</div>
           <div className={s.overlayRow}>
             <button className="primary" onClick={resume}>
               계속하기
             </button>
-            <button onClick={quit}>종료</button>
+            <button onClick={quit}>종료 (진행 저장)</button>
           </div>
         </div>
       )}
