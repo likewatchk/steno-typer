@@ -545,7 +545,9 @@ export default function Practice() {
         onPointerDown={onTrackPointer}
         onPointerMove={onTrackPointer}
       >
-        <div ref={barRef} className={s.barFill} />
+        <div className={s.barClip}>
+          <div ref={barRef} className={s.barFill} />
+        </div>
         <div ref={handleRef} className={s.barHandle} />
       </div>
       <div ref={counterRef} className={`${s.counter} num`} />

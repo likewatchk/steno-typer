@@ -17,24 +17,34 @@
 
 .barTrack {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 6px;
+  top: 12px;
+  left: 16px;
+  right: 16px;
+  height: 12px;
+  border-radius: 999px;
   background: var(--border);
   /* 일시정지 스크럽 시 오버레이 위에서도 만질 수 있게 */
   z-index: 7;
 }
 
-/* 터치 히트 영역 확장 (시각적 두께는 6px 유지) */
+/* 채움만 클립 (핸들은 트랙 밖으로 살짝 나올 수 있어야 함) */
+.barClip {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+/* 터치 히트 영역 확장 (시각적 두께는 12px 유지) */
 .barTrack::after {
   content: '';
   position: absolute;
-  inset: -8px 0 -14px 0;
+  inset: -10px 0 -10px 0;
 }
 
 .barFill {
   height: 100%;
+  border-radius: inherit;
   background: var(--accent);
   transform-origin: left;
   transform: scaleX(0);
@@ -45,9 +55,9 @@
 .barHandle {
   position: absolute;
   top: 50%;
-  width: 16px;
-  height: 16px;
-  margin: -8px 0 0 -8px;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--bg-elev);
@@ -65,7 +75,7 @@
 
 .pauseBtn {
   position: absolute;
-  top: 14px;
+  top: 34px;
   right: 84px;
   z-index: 6;
   border: 1px solid var(--border);
@@ -102,7 +112,7 @@
 
 .counter {
   position: absolute;
-  top: 12px;
+  top: 36px;
   right: 18px;
   color: var(--text-dim);
   font-size: 14px;
@@ -110,7 +120,7 @@
 
 .liveStats {
   position: absolute;
-  top: 12px;
+  top: 36px;
   left: 18px;
   color: var(--text-dim);
   font-size: 14px;
