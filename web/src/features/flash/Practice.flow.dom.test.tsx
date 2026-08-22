@@ -234,6 +234,69 @@ describe('일시정지·시킹·이어하기', () => {
   })
 })
 
+describe('무제한 모드 (맞추면 넘어가기)', () => {
+  const type = (ta: HTMLTextAreaElement, text: string) => {
+    act(() => {
+      ta.value = text
+      ta.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }))
+    })
+  }
+  const waitFor = async (cond: () => boolean, why: string) => {
+    const t0 = Date.now()
+    while (!cond()) {
+      if (Date.now() - t0 > 5000) throw new Error(`대기 초과: ${why}`)
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 25))
+      })
+    }
+  }
+
+  it('연속 모드: 정답 입력(띄어쓰기 확정) → 자동 다음, 마지막 정답 → 결과 화면', async () => {
+    vi.stubGlobal('Worker', EchoWorker)
+    useApp.setState((st) => ({
+      settings: {
+        ...st.settings,
+        mode: 'typing',
+        durationMode: 'untimed',
+        countdown: false,
+        fullscreen: false,
+        liveStats: false,
+      },
+    }))
+    const ws = await repo.createWordset(`무제한${Date.now()}`, ['가나', '다라'])
+    await act(async () => {
+      await useApp.getState().reloadWordsets()
+      useApp.getState().select(ws.id)
+      root.render(<App />)
+    })
+    act(() => {
+      useApp.getState().startPractice()
+    })
+    await act(async () => {})
+    const ta = container.querySelector('textarea')!
+
+    // 오답 상태에선 넘어가지 않는다
+    type(ta, '가')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    expect(container.textContent).toContain('1 / 2')
+
+    // 정답 + 공백 확정 → 다음 항목
+    type(ta, '가나 ')
+    await waitFor(() => container.textContent?.includes('2 / 2') ?? false, '항목 2 진입')
+
+    // 마지막 정답 → 채점 → 결과 화면
+    type(ta, '가나 다라 ')
+    await waitFor(() => useApp.getState().screen.name === 'result', '결과 화면')
+    const screen = useApp.getState().screen
+    if (screen.name !== 'result') throw new Error('unreachable')
+    expect(screen.record.result!.accuracy).toBe(1)
+    // 실경과 기반 KPM — 명목 타임라인(하루/항목)이 아니라 초 단위여야 함
+    expect(screen.record.result!.elapsedMs).toBeLessThan(60_000)
+  })
+})
+
 describe('타이핑 세션 종료 흐름', () => {
   it('정상 워커(에코): 세션 종료 → 결과 화면 + 기록 저장', async () => {
     vi.stubGlobal('Worker', EchoWorker)

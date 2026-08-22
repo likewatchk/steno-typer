@@ -10,8 +10,11 @@ import { toWordItem, type EngineItem, type RangeSpec, type Settings, type WordIn
 
 export type { EngineItem }
 
+/** '무제한' 모드의 항목당 명목 시간 — 자동 전환이 사실상 일어나지 않는 하루 */
+export const UNTIMED_MS = 86_400_000
+
 export interface TimelineConfig {
-  durationMode: 'auto' | 'fixed'
+  durationMode: 'auto' | 'fixed' | 'untimed'
   fixedMs: number
   autoBaseMs: number
   autoPerCharMs: number
@@ -38,17 +41,22 @@ export interface TimelineHooks {
 type Ev = { t: number; kind: 0 | 1 | 2 | 3; index: number } // 0=countdown 1=show 2=blank 3=done
 
 export function computeDuration(text: string, cfg: TimelineConfig): number {
+  if (cfg.durationMode === 'untimed') return UNTIMED_MS
   if (cfg.durationMode === 'fixed') return cfg.fixedMs
   const chars = [...text].length
-  const speed = Math.min(2, Math.max(0.5, cfg.autoSpeed ?? 1))
+  const speed = Math.min(2, Math.max(0.2, cfg.autoSpeed ?? 1))
   const ms = (cfg.autoBaseMs + cfg.autoPerCharMs * chars) / speed
-  return Math.round(Math.min(cfg.autoMaxMs, Math.max(cfg.autoMinMs, ms)))
+  // 저속(여유) 배속에선 최대시간 상한도 같이 늘려 긴 항목이 8초에 눌리지 않게
+  const maxMs = speed < 1 ? cfg.autoMaxMs / speed : cfg.autoMaxMs
+  return Math.round(Math.min(maxMs, Math.max(cfg.autoMinMs, ms)))
 }
 
 export class FlashTimeline {
   private events: Ev[] = []
   private ptr = 0
   private startWall = 0
+  /** 세션 시작 벽시계 — seekTo 가 startWall 을 옮겨도 실경과 측정은 이 값 기준 */
+  private wallStart = 0
   private pausedTotal = 0
   private pauseStartedWall = 0
   private _paused = false
@@ -96,6 +104,12 @@ export class FlashTimeline {
   /** 카운트다운 제외 총 연습 시간 (일시정지 무관 — 타임라인은 고정 길이) */
   get practiceMs(): number {
     return this.practiceTotal
+  }
+
+  /** 실제 경과 시간(일시정지 제외) — 무제한 모드의 KPM 산정용. seekTo 와 무관하게 정확 */
+  elapsedMs(now: number): number {
+    const anchor = this._paused ? this.pauseStartedWall : now
+    return Math.max(0, anchor - this.wallStart - this.pausedTotal)
   }
 
   get itemCount(): number {
@@ -154,6 +168,7 @@ export class FlashTimeline {
 
   start(now: number): void {
     this.startWall = now
+    this.wallStart = now
     this._running = true
     this.tick(now)
   }

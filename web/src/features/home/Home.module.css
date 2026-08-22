@@ -208,6 +208,19 @@
   color: var(--text-dim);
 }
 
+.presetChip {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--text-dim);
+}
+
+.presetOn {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .numInput {
   width: 72px;
 }

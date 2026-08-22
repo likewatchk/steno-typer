@@ -16,7 +16,8 @@ import type { ResumeState, SessionRecord } from '../../lib/types.ts'
 import StenoInput, { type StenoInputHandle } from '../typing/StenoInput.tsx'
 import { setDiagEnabled } from '../typing/diagnostics.ts'
 import { simulateBurst, simulateIme, simulatePaste } from '../typing/simulator.ts'
-import { scoreSession, type ScoreRequest } from '../scoring/score.ts'
+import { normalizeText } from '../scoring/normalize.ts'
+import { effectiveScoring, scoreSession, type ScoreRequest } from '../scoring/score.ts'
 import type { SessionResult } from '../../lib/types.ts'
 import type { WorkerIn, WorkerOut } from '../scoring/scoring.worker.ts'
 import s from './Practice.module.css'
@@ -54,6 +55,8 @@ export default function Practice() {
 
   const engineRef = useRef<FlashTimeline | null>(null)
   const doneStatsRef = useRef({ count: 0, ms: 0 })
+  /** 무제한 모드: 입력이 바뀌었으니 정답 검사 필요 (핸들러는 O(1), 검사는 rAF 에서) */
+  const matchDirtyRef = useRef(false)
   // 이펙트 내부 함수를 JSX 핸들러에 노출하기 위한 다리
   const seekRef = useRef<((index: number) => void) | null>(null)
   const pauseRef = useRef<(() => void) | null>(null)
@@ -103,8 +106,12 @@ export default function Practice() {
         ? Math.max(0, Math.min(resumeState.index, items.length - 1))
         : 0
 
+    // 무제한은 타이핑 전용 — 보기 모드로 열리면 자동 폴백
+    const effDurationMode = settings.durationMode === 'untimed' && !typing ? 'auto' : settings.durationMode
+    const untimed = effDurationMode === 'untimed'
+
     const cfg: TimelineConfig = {
-      durationMode: settings.durationMode,
+      durationMode: effDurationMode,
       fixedMs: settings.fixedMs,
       autoBaseMs: settings.autoBaseMs,
       autoPerCharMs: settings.autoPerCharMs,
@@ -206,6 +213,10 @@ export default function Practice() {
     function onItemBoundary(prevIndex: number) {
       const input = inputRef.current
       if (!typing || !input) return
+      // 무제한 모드는 명목 타임라인(하루/항목)이라 실경과로 KPM 산정
+      const liveElapsed = untimed
+        ? Math.max(1, Math.round(engineRef.current?.elapsedMs(performance.now()) ?? 1))
+        : (elapsedAtShow[prevIndex + 1] ?? 1)
       if (continuous) {
         boundaries[prevIndex] = input.value().length
         if (liveStats && worker && !brokeLive) {
@@ -214,7 +225,7 @@ export default function Practice() {
             fullText: input.value(),
             boundaries: boundaries.slice(),
             uptoItem: prevIndex,
-            elapsedMs: elapsedAtShow[prevIndex + 1] ?? 1,
+            elapsedMs: liveElapsed,
           }
           worker.postMessage(msg)
         }
@@ -225,7 +236,7 @@ export default function Practice() {
             kind: 'live-discrete-step',
             target: texts[prevIndex],
             answer: answers[prevIndex],
-            elapsedMs: elapsedAtShow[prevIndex + 1] ?? 1,
+            elapsedMs: liveElapsed,
           }
           worker.postMessage(msg)
         }
@@ -236,7 +247,9 @@ export default function Practice() {
       const input = inputRef.current
       if (!input || !engineRef.current) return
       setOverlay('scoring')
-      const elapsedMs = engineRef.current.practiceMs
+      const elapsedMs = untimed
+        ? Math.max(1000, Math.round(engineRef.current.elapsedMs(performance.now())))
+        : engineRef.current.practiceMs
 
       // 폴백 채점에 쓸 요청을 먼저 확정 (워커가 죽어 있어도 채점 가능해야 한다)
       if (continuous) {
@@ -275,6 +288,8 @@ export default function Practice() {
         const cd = cdRef.current
         if (cd && cd.textContent) cd.textContent = ''
         if (i > 0) onItemBoundary(i - 1)
+        // 무제한: 진행바는 시간 대신 항목 위치로 (선형 매핑 — 스크럽과 동일 기준)
+        if (untimed && barRef.current) barRef.current.style.transform = `scaleX(${tl.showFraction(i)})`
         const el = textRef.current
         if (el) {
           const fit = fits[i]
@@ -308,6 +323,7 @@ export default function Practice() {
         if (el) el.style.opacity = '0'
       },
       onProgress(frac) {
+        if (untimed) return // 명목 타임라인(하루/항목) — 시간 진행은 무의미
         const bar = barRef.current
         if (bar) bar.style.transform = `scaleX(${frac})`
       },
@@ -383,6 +399,28 @@ export default function Practice() {
     }
     seekRef.current = doSeek
 
+    // ---- 무제한 모드: 정답 정합 검사 (입력 핸들러는 dirty 플래그만, 검사는 rAF 에서) ----
+    const scoringEff = effectiveScoring(settings.scoring)
+    const normOpts = { ignoreSpace: scoringEff.ignoreSpace, ignorePunct: scoringEff.ignorePunct }
+    const normTargets = untimed ? texts.map((t) => normalizeText(t, normOpts)) : []
+    function checkMatch() {
+      if (!untimed || finished || overlayRef.current !== null) return
+      const input = inputRef.current
+      if (!input || input.isComposing()) return // 조합 확정(예: 띄어쓰기) 후에만 판정
+      const i = Math.max(0, tl.currentIndex)
+      const seg = continuous ? input.value().slice(i > 0 ? (boundaries[i - 1] ?? 0) : 0) : input.value()
+      if (!seg || normalizeText(seg, normOpts) !== normTargets[i]) return
+      if (sound) playTick()
+      if (i + 1 < items.length) {
+        tl.seekTo(i + 1, performance.now()) // onShow → onItemBoundary(i) 가 경계·답 기록
+      } else {
+        finished = true
+        tl.stop()
+        if (textRef.current) textRef.current.style.opacity = '0'
+        finishTyping() // 무제한은 타이핑 전용 — 채점으로 직행
+      }
+    }
+
     // ---- 이어하기 저장 (종료·이탈 시) ----
     function saveResumeNow() {
       if (finished || finalized) return
@@ -413,6 +451,10 @@ export default function Practice() {
     let resumeCdTimer = 0
     const loop = () => {
       tl.tick(performance.now())
+      if (matchDirtyRef.current) {
+        matchDirtyRef.current = false
+        checkMatch()
+      }
       if (tl.running) raf = requestAnimationFrame(loop)
     }
     const begin = () => {
@@ -581,7 +623,12 @@ export default function Practice() {
             ref={inputRef}
             style={{ fontSize: settings.inputFontPx }}
             className={s.input}
-            placeholder=""
+            placeholder={
+              settings.durationMode === 'untimed' ? '맞게 치고 띄어쓰기로 확정하면 다음으로 넘어갑니다' : ''
+            }
+            onDirty={() => {
+              matchDirtyRef.current = true
+            }}
             onBlurred={() => {
               // 주입 도중 프로그램적 refocus 는 글자를 떨군다 — 오버레이로 사용자 클릭 유도
               if (overlayRef.current === null && engineRef.current?.running && !engineRef.current.paused) {

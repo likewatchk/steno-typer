@@ -268,7 +268,15 @@ export default function Home() {
                     ['view', '보기만'],
                     ['typing', '타이핑 채점'],
                   ]}
-                  onChange={(mode) => patchSettings({ mode })}
+                  onChange={(mode) =>
+                    patchSettings({
+                      mode,
+                      // 무제한은 타이핑 전용 — 보기 모드로 바꾸면 자동으로 복귀
+                      ...(mode === 'view' && settings.durationMode === 'untimed'
+                        ? { durationMode: 'auto' as const }
+                        : {}),
+                    })
+                  }
                 />
               </div>
 
@@ -277,10 +285,18 @@ export default function Home() {
                 <div className={s.inline}>
                   <Seg
                     value={settings.durationMode}
-                    options={[
-                      ['auto', '글자수 자동'],
-                      ['fixed', '고정'],
-                    ]}
+                    options={
+                      settings.mode === 'typing'
+                        ? [
+                            ['auto', '글자수 자동'],
+                            ['fixed', '고정'],
+                            ['untimed', '무제한'],
+                          ]
+                        : [
+                            ['auto', '글자수 자동'],
+                            ['fixed', '고정'],
+                          ]
+                    }
                     onChange={(durationMode) => patchSettings({ durationMode })}
                   />
                   {settings.durationMode === 'fixed' && (
@@ -297,22 +313,47 @@ export default function Home() {
                     </>
                   )}
                 </div>
+                {settings.durationMode === 'untimed' && (
+                  <span className={s.hint}>
+                    시간 제한 없음 — 맞게 치면 자동으로 다음 항목. 낱말 끝에 띄어쓰기를 치면 확정됩니다.
+                  </span>
+                )}
                 {settings.durationMode === 'auto' && (
-                  <div className={s.inline}>
-                    <span className={s.hint}>여유있게</span>
-                    <input
-                      type="range"
-                      min={50}
-                      max={200}
-                      step={5}
-                      value={Math.round(settings.autoSpeed * 100)}
-                      onChange={(e) => patchSettings({ autoSpeed: +e.target.value / 100 })}
-                    />
-                    <span className={s.hint}>빡세게</span>
-                    <span className={`${s.hint} num`}>
-                      {autoPreview(settings, 3)}초/3글자 · {autoPreview(settings, 8)}초/8글자
-                    </span>
-                  </div>
+                  <>
+                    <div className={s.inline}>
+                      <span className={s.hint}>완전 여유</span>
+                      <input
+                        type="range"
+                        min={20}
+                        max={200}
+                        step={5}
+                        value={Math.round(settings.autoSpeed * 100)}
+                        onChange={(e) => patchSettings({ autoSpeed: +e.target.value / 100 })}
+                      />
+                      <span className={s.hint}>빡세게</span>
+                      <span className={`${s.hint} num`}>
+                        {autoPreview(settings, 3)}초/3글자 · {autoPreview(settings, 8)}초/8글자
+                      </span>
+                    </div>
+                    <div className={s.inline}>
+                      {(
+                        [
+                          ['여유롭게', 0.7],
+                          ['더 여유롭게', 0.5],
+                          ['더더 여유롭게', 0.35],
+                          ['완전 여유롭게', 0.2],
+                        ] as const
+                      ).map(([label, v]) => (
+                        <button
+                          key={label}
+                          className={`${s.presetChip} ${Math.abs(settings.autoSpeed - v) < 0.011 ? s.presetOn : ''}`}
+                          onClick={() => patchSettings({ autoSpeed: v })}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
 

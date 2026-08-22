@@ -40,6 +40,40 @@ describe('computeDuration', () => {
     expect(computeDuration('가'.repeat(100), c)).toBe(8000) // max 클램프
   })
 
+  it('무제한 모드 — 항목당 하루 (자동 전환 사실상 없음)', () => {
+    expect(computeDuration('가나다', cfg({ durationMode: 'untimed' }))).toBe(86_400_000)
+  })
+
+  it('저속 배속 — 하한 0.2 클램프 + 느린 쪽에선 최대시간 상한도 확장', () => {
+    // 100글자: 공식값 18600ms → 0.2배속 = 93000, 상한 8000/0.2=40000 에 클램프
+    expect(computeDuration('가'.repeat(100), cfg({ durationMode: 'auto', autoSpeed: 0.2 }))).toBe(40000)
+    // 하한 클램프: 0.05 → 0.2 와 동일
+    expect(computeDuration('가나다라마', cfg({ durationMode: 'auto', autoSpeed: 0.05 }))).toBe(
+      computeDuration('가나다라마', cfg({ durationMode: 'auto', autoSpeed: 0.2 })),
+    )
+    // 빠른 쪽 상한은 그대로 8000
+    expect(computeDuration('가'.repeat(100), cfg({ durationMode: 'auto', autoSpeed: 1.5 }))).toBe(8000)
+  })
+
+  it('elapsedMs — 일시정지 제외 실경과 (무제한 KPM 용)', () => {
+    const tl = new FlashTimeline(items(2), cfg({ durationMode: 'untimed' }), {
+      onCountdown() {},
+      onShow() {},
+      onBlank() {},
+      onProgress() {},
+      onDone() {},
+    })
+    tl.start(0)
+    expect(tl.elapsedMs(500)).toBe(500)
+    tl.pause(600)
+    expect(tl.elapsedMs(9999)).toBe(600)
+    tl.resume(2000)
+    expect(tl.elapsedMs(2500)).toBe(1100)
+    // seekTo 는 타임라인 시각만 옮기고 실경과는 왜곡하지 않는다
+    tl.seekTo(1, 2500)
+    expect(tl.elapsedMs(3000)).toBe(1600)
+  })
+
   it('배속(autoSpeed) — 시간 = 공식값 ÷ 배속, 클램프는 배속 후 적용', () => {
     const base = cfg({ durationMode: 'auto' })
     expect(computeDuration('가나다라마', cfg({ durationMode: 'auto', autoSpeed: 1 }))).toBe(1500)

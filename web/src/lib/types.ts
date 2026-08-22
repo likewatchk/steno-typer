@@ -53,13 +53,14 @@ export interface ScoringOptions {
 
 export interface Settings {
   mode: 'view' | 'typing'
-  durationMode: 'auto' | 'fixed'
+  /** untimed = 시간 무제한, 맞게 치면 다음으로 (타이핑 모드 전용) */
+  durationMode: 'auto' | 'fixed' | 'untimed'
   fixedMs: number
   autoBaseMs: number
   autoPerCharMs: number
   autoMinMs: number
   autoMaxMs: number
-  /** 자동 노출시간 배속 (0.5=여유 ~ 2.0=빡세게). 시간 = 공식값 ÷ 배속 */
+  /** 자동 노출시간 배속 (0.2=완전 여유 ~ 2.0=빡세게). 시간 = 공식값 ÷ 배속 */
   autoSpeed: number
   blankMs: number
   order: 'seq' | 'shuffle'
