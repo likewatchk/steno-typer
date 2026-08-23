@@ -132,8 +132,17 @@ export const useApp = create<AppState>((set, get) => ({
     }))
   },
 
-  startPracticeResume(state) {
-    if (state.items.length === 0) return
+  startPracticeResume(rawState) {
+    if (rawState.items.length === 0) return
+    // 저장 이후 설정 스키마가 확장돼도 안전하게 — 기본값 위에 저장값 병합 (getSettings 와 동일 패턴)
+    const state: ResumeState = {
+      ...rawState,
+      settings: {
+        ...DEFAULT_SETTINGS,
+        ...rawState.settings,
+        scoring: { ...DEFAULT_SETTINGS.scoring, ...rawState.settings?.scoring },
+      },
+    }
     // 스냅샷 기반 가짜 Wordset — 원본이 수정·삭제돼도 이어하기는 저장 시점 그대로
     const wordset: Wordset = {
       id: state.wordsetId,

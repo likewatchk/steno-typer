@@ -128,6 +128,8 @@ export interface ResumeState {
   typing?:
     | { kind: 'continuous'; fullText: string; boundaries: number[] }
     | { kind: 'discrete'; answers: string[] }
+  /** 무제한 모드: 지금까지의 실경과 누적 (이어하기 후 KPM 정확성) */
+  elapsedMs?: number
   savedAt: number
 }
 

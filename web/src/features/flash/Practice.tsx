@@ -105,6 +105,10 @@ export default function Practice() {
       resumeState && resumeState.wordsetId === plan.wordset.id
         ? Math.max(0, Math.min(resumeState.index, items.length - 1))
         : 0
+    /** 무제한 모드: 이전 세션들의 실경과 누적 (KPM 이 이어짐) */
+    const elapsedOffset = resumeState?.elapsedMs ?? 0
+    /** 엔진이 실제로 시작됐는가 — 이어하기 카운트다운 중 이탈 시 진행 유실 방지 */
+    let engineBegun = false
 
     // 무제한은 타이핑 전용 — 보기 모드로 열리면 자동 폴백
     const effDurationMode = settings.durationMode === 'untimed' && !typing ? 'auto' : settings.durationMode
@@ -215,7 +219,7 @@ export default function Practice() {
       if (!typing || !input) return
       // 무제한 모드는 명목 타임라인(하루/항목)이라 실경과로 KPM 산정
       const liveElapsed = untimed
-        ? Math.max(1, Math.round(engineRef.current?.elapsedMs(performance.now()) ?? 1))
+        ? Math.max(1, elapsedOffset + Math.round(engineRef.current?.elapsedMs(performance.now()) ?? 1))
         : (elapsedAtShow[prevIndex + 1] ?? 1)
       if (continuous) {
         boundaries[prevIndex] = input.value().length
@@ -248,7 +252,7 @@ export default function Practice() {
       if (!input || !engineRef.current) return
       setOverlay('scoring')
       const elapsedMs = untimed
-        ? Math.max(1000, Math.round(engineRef.current.elapsedMs(performance.now())))
+        ? Math.max(1000, elapsedOffset + Math.round(engineRef.current.elapsedMs(performance.now())))
         : engineRef.current.practiceMs
 
       // 폴백 채점에 쓸 요청을 먼저 확정 (워커가 죽어 있어도 채점 가능해야 한다)
@@ -424,7 +428,8 @@ export default function Practice() {
     // ---- 이어하기 저장 (종료·이탈 시) ----
     function saveResumeNow() {
       if (finished || finalized) return
-      const index = Math.max(0, tl.currentIndex)
+      // 엔진 미시작(이어하기 카운트다운 중) 이탈 → 복원 예정 인덱스를 보존해야 진행 유실이 없다
+      const index = engineBegun ? Math.max(0, tl.currentIndex) : resumeIdx
       const state: ResumeState = {
         wordsetId: plan!.wordset.id,
         wordsetName: plan!.wordset.name,
@@ -440,6 +445,12 @@ export default function Practice() {
               }
             : { kind: 'discrete', answers: answers.slice(0, index) }
           : undefined,
+        ...(untimed
+          ? {
+              elapsedMs:
+                elapsedOffset + (engineBegun ? Math.round(tl.elapsedMs(performance.now())) : 0),
+            }
+          : {}),
         savedAt: Date.now(),
       }
       void repo.saveResume(state)
@@ -458,6 +469,7 @@ export default function Practice() {
       if (tl.running) raf = requestAnimationFrame(loop)
     }
     const begin = () => {
+      engineBegun = true
       const now = performance.now()
       tl.start(now)
       if (resumeIdx > 0) {

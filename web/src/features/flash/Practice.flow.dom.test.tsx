@@ -234,6 +234,109 @@ describe('일시정지·시킹·이어하기', () => {
   })
 })
 
+describe('리뷰 회귀: 이어하기 견고성', () => {
+  it('이어하기 카운트다운 중 이탈해도 진행(index)이 유실되지 않는다', async () => {
+    vi.stubGlobal('Worker', EchoWorker)
+    const saved = {
+      wordsetId: 'rv-1',
+      wordsetName: '견고성',
+      items: [
+        { text: '하나', sourceIndex: 0 },
+        { text: '둘', sourceIndex: 1 },
+        { text: '셋', sourceIndex: 2 },
+      ],
+      index: 2,
+      // countdown true → UI 카운트다운 동안 엔진 미시작 상태가 존재
+      settings: { ...DEFAULT_SETTINGS, mode: 'view' as const, countdown: true, fullscreen: false },
+      savedAt: Date.now(),
+    }
+    await repo.saveResume(saved)
+    act(() => {
+      useApp.getState().startPracticeResume(saved)
+    })
+    await act(async () => {
+      root.render(<App />)
+    })
+    // 카운트다운 중(엔진 시작 전) 페이지 이탈
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'))
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    const after = await repo.getResume('rv-1')
+    expect(after?.index).toBe(2) // 0 으로 후퇴하면 진행 유실 회귀
+    await repo.deleteResume('rv-1')
+    act(() => {
+      useApp.getState().finishPractice(null)
+    })
+  })
+
+  it('구버전 ResumeState(결측 설정 필드)도 기본값 병합으로 안전 시작', () => {
+    const legacySettings = { ...DEFAULT_SETTINGS, mode: 'view' as const } as Record<string, unknown>
+    delete legacySettings.hintMode
+    delete legacySettings.liveStats
+    ;(legacySettings.scoring as Record<string, unknown>) = { ignoreSpace: false }
+    act(() => {
+      useApp.getState().startPracticeResume({
+        wordsetId: 'rv-2',
+        wordsetName: '레거시',
+        items: [{ text: '가', sourceIndex: 0 }],
+        index: 0,
+        settings: legacySettings as never,
+        savedAt: Date.now(),
+      })
+    })
+    const st = useApp.getState().resumeFrom!
+    expect(st.settings.hintMode).toBe('show') // 기본 병합
+    expect(st.settings.liveStats).toBe(true)
+    expect(st.settings.scoring.ignoreSpace).toBe(false) // 저장값 우선
+    expect(st.settings.scoring.unit).toBe('syllable')
+    act(() => {
+      useApp.getState().finishPractice(null)
+    })
+  })
+
+  it('무제한 세션 저장 시 실경과 누적(elapsedMs) 기록', async () => {
+    vi.stubGlobal('Worker', EchoWorker)
+    useApp.setState((st) => ({
+      settings: {
+        ...st.settings,
+        mode: 'typing',
+        durationMode: 'untimed',
+        countdown: false,
+        fullscreen: false,
+        liveStats: false,
+      },
+    }))
+    const ws = await repo.createWordset(`무제한저장${Date.now()}`, ['가나', '다라'])
+    await act(async () => {
+      await useApp.getState().reloadWordsets()
+      useApp.getState().select(ws.id)
+      root.render(<App />)
+    })
+    act(() => {
+      useApp.getState().startPractice()
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80)) // 실경과 확보
+    })
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    const quitBtn = [...container.querySelectorAll('button')].find((b) => b.textContent?.includes('종료'))!
+    act(() => {
+      quitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    const saved = await repo.getResume(ws.id)
+    expect(saved?.elapsedMs).toBeGreaterThan(0)
+    expect(saved?.typing?.kind).toBe('continuous')
+  })
+})
+
 describe('무제한 모드 (맞추면 넘어가기)', () => {
   const type = (ta: HTMLTextAreaElement, text: string) => {
     act(() => {
