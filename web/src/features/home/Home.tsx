@@ -554,6 +554,12 @@ export default function Home() {
                       onChange={(inputStyle) => patchScoring({ inputStyle })}
                     />
                   </div>
+                  {settings.scoring.inputStyle === 'discrete' && (
+                    <span className={s.hint}>
+                      속기 프로그램(소리자바 등)으로 칠 때는 '연속'을 권장 — 항목마다 입력창을
+                      비우는 방식이라 속기 프로그램의 지웠다 다시 쓰기와 어긋날 수 있습니다.
+                    </span>
+                  )}
                   <label className={s.check}>
                     <input
                       type="checkbox"
@@ -660,14 +666,10 @@ export default function Home() {
                     />
                     안전 모드 — 소리·페이드·미리보기 끔 (입력 문제 시)
                   </label>
-                  <label className={s.check}>
-                    <input
-                      type="checkbox"
-                      checked={settings.diagnostics}
-                      onChange={(e) => patchSettings({ diagnostics: e.target.checked })}
-                    />
-                    입력 진단 기록 — 속기계 문제 분석용 로그 수집
-                  </label>
+                  <span className={s.hint}>
+                    입력 진단은 항상 기록됩니다 — 글자가 안 쳐지는 순간이 있으면 자유연습 하단의
+                    [진단 내보내기]로 저장해 주세요.
+                  </span>
                 </div>
               </details>
 

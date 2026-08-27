@@ -3,30 +3,27 @@
  * StenoInput 의 방어 규칙 그대로, 깜빡이 없이 입력만.
  * 카운터 갱신도 DOM 직접 기록 (타이핑 중 React 리렌더 0).
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useApp } from '../../app/store.ts'
 import { countKeystrokes } from '../../lib/hangul.ts'
 import StenoInput, { type StenoInputHandle } from './StenoInput.tsx'
-import { diagCount, diagExport, setDiagEnabled } from './diagnostics.ts'
+import { diagCount, diagExport } from './diagnostics.ts'
 import s from './FreePractice.module.css'
 
 const SAVE_KEY = 'steno-free-text'
 
 export default function FreePractice() {
   const { go } = useApp.getState()
-  const diagnostics = useApp((st) => st.settings.diagnostics)
   const inputFontPx = useApp((st) => st.settings.inputFontPx)
   const inputRef = useRef<StenoInputHandle>(null)
   const charsRef = useRef<HTMLSpanElement>(null)
   const strokesRef = useRef<HTMLSpanElement>(null)
-  const diagCountRef = useRef<HTMLSpanElement>(null)
+  // 포커스 이탈 = 주입 유실의 1순위 원인 — 놓치지 않게 크게 표시
+  const [focusLost, setFocusLost] = useState(false)
+  const diagCountEl = useRef<HTMLSpanElement>(null)
 
   const pendingRef = useRef(false)
   const saveTimerRef = useRef(0)
-
-  useEffect(() => {
-    setDiagEnabled(diagnostics)
-  }, [diagnostics])
 
   useEffect(() => {
     // 복원 — 비제어 textarea 라 DOM 에 직접
@@ -61,7 +58,7 @@ export default function FreePractice() {
     const v = inputRef.current?.value() ?? ''
     if (charsRef.current) charsRef.current.textContent = `${[...v].length.toLocaleString()}자`
     if (strokesRef.current) strokesRef.current.textContent = `${countKeystrokes(v).toLocaleString()}타`
-    if (diagCountRef.current) diagCountRef.current.textContent = diagCount().toLocaleString()
+    if (diagCountEl.current) diagCountEl.current.textContent = diagCount().toLocaleString()
   }
 
   function onDirty() {
@@ -115,16 +112,32 @@ export default function FreePractice() {
         </span>
       </header>
 
+      {focusLost && (
+        <button
+          className={s.focusBanner}
+          onClick={() => {
+            inputRef.current?.focus()
+          }}
+        >
+          ⚠️ 입력 포커스가 풀렸습니다 — 지금 치는 글자는 들어가지 않아요. 여기를 눌러 계속
+        </button>
+      )}
+
       <StenoInput
         ref={inputRef}
         className={s.input}
         style={{ fontSize: inputFontPx }}
         placeholder="자유롭게 연습하세요. 내용은 이 브라우저에 자동 저장됩니다."
         onDirty={onDirty}
+        onBlurred={() => setFocusLost(true)}
+        onFocused={() => setFocusLost(false)}
       />
 
       <footer className={s.footer}>
-        <button onClick={downloadTxt}>.txt 저장</button>
+        {/* 버튼이 입력 포커스를 뺏지 않게 (방어 규칙 9) — 클릭 후에도 계속 칠 수 있다 */}
+        <button onMouseDown={(e) => e.preventDefault()} onClick={downloadTxt}>
+          .txt 저장
+        </button>
         <button onClick={clearAll}>지우기</button>
         <label className={s.fontCtl}>
           글자
@@ -138,12 +151,10 @@ export default function FreePractice() {
           />
           <span className="num">{inputFontPx}px</span>
         </label>
-        {diagnostics && (
-          <button onClick={() => diagExport()}>
-            진단 로그 내보내기 (<span ref={diagCountRef} className="num">0</span>)
-          </button>
-        )}
-        <span className={s.hint}>새로고침해도 내용이 남습니다 · 저장은 .txt 다운로드</span>
+        <button onMouseDown={(e) => e.preventDefault()} onClick={() => diagExport()}>
+          진단 내보내기 (<span ref={diagCountEl} className="num">0</span>)
+        </button>
+        <span className={s.hint}>안 쳐지는 순간이 있었다면 바로 [진단 내보내기]로 저장해 주세요</span>
       </footer>
     </div>
   )

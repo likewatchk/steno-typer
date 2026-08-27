@@ -101,6 +101,25 @@ describe('앱 통합 스모크', () => {
     expect(useApp.getState().screen.name).toBe('home')
   })
 
+  it('자유연습: 포커스가 풀리면 배너 표시, 클릭하면 복귀 (주입 유실 방어)', async () => {
+    await act(async () => {
+      root.render(<App />)
+    })
+    clickByText('자유연습')
+    await act(async () => {})
+    const ta = container.querySelector('textarea')!
+    act(() => {
+      ta.focus()
+      ta.blur()
+    })
+    expect(text()).toContain('입력 포커스가 풀렸습니다')
+    clickByText('여기를 눌러 계속')
+    expect(document.activeElement).toBe(ta)
+    expect(text()).not.toContain('입력 포커스가 풀렸습니다')
+    clickByText('← 홈')
+    await act(async () => {})
+  })
+
   it('편집 화면 — 붙여넣기 분할 추가 → 저장 → 홈 목록 갱신', async () => {
     await act(async () => {
       root.render(<App />)

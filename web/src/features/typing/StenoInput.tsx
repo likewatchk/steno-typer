@@ -79,6 +79,8 @@ const StenoInput = forwardRef<StenoInputHandle, Props>(function StenoInput(props
       data-gramm="false"
       data-gramm_editor="false"
       data-enable-grammarly="false"
+      // Windows Edge 의 '텍스트 예측' — textarea 에 제안을 끼워 넣어 주입 텍스트와 충돌
+      {...{ writingsuggestions: 'false' }}
       onKeyDown={(e) => {
         // 어떤 키도 막지 않는다 — 기록만.
         diagLog({ type: 'keydown', key: e.key, composing: e.nativeEvent.isComposing })

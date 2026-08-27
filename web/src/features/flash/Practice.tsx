@@ -14,7 +14,6 @@ import { playTick } from '../../lib/sound.ts'
 import { FlashTimeline, type TimelineConfig } from '../../lib/scheduler.ts'
 import type { ResumeState, SessionRecord } from '../../lib/types.ts'
 import StenoInput, { type StenoInputHandle } from '../typing/StenoInput.tsx'
-import { setDiagEnabled } from '../typing/diagnostics.ts'
 import { simulateBurst, simulateIme, simulatePaste } from '../typing/simulator.ts'
 import { normalizeText } from '../scoring/normalize.ts'
 import { effectiveScoring, scoreSession, type ScoreRequest } from '../scoring/score.ts'
@@ -76,7 +75,6 @@ export default function Practice() {
     if (!plan) return
     const items = plan.items
     const texts = items.map((it) => it.text)
-    setDiagEnabled(settings.diagnostics)
 
     // ---- 폰트 크기 사전 계산 (런 중 측정 0) ----
     const textAreaH = typing ? window.innerHeight * 0.5 : window.innerHeight

@@ -46,6 +46,8 @@ describe('StenoInput 방어 속성', () => {
     expect(el.getAttribute('autocorrect')).toBe('off')
     expect(el.getAttribute('autocapitalize')).toBe('off')
     expect(el.getAttribute('data-gramm')).toBe('false')
+    // Windows Edge 텍스트 예측 차단
+    expect(el.getAttribute('writingsuggestions')).toBe('false')
   })
 
   it('textarea 를 쓴다 (contenteditable 금지 규칙)', () => {
