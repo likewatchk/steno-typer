@@ -53,8 +53,11 @@ export interface ScoringOptions {
 
 export interface Settings {
   mode: 'view' | 'typing'
-  /** untimed = 시간 무제한, 맞게 치면 다음으로 (타이핑 모드 전용) */
-  durationMode: 'auto' | 'fixed' | 'untimed'
+  /**
+   * untimed = 시간 무제한, 맞게 치면 다음으로 (타이핑 전용)
+   * manual  = 시간 무제한, 엔터를 쳐야만 다음으로 (타이핑 전용)
+   */
+  durationMode: 'auto' | 'fixed' | 'untimed' | 'manual'
   fixedMs: number
   autoBaseMs: number
   autoPerCharMs: number

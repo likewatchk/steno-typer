@@ -400,6 +400,91 @@ describe('무제한 모드 (맞추면 넘어가기)', () => {
   })
 })
 
+describe('엔터로 넘기기 모드 (manual)', () => {
+  const waitFor = async (cond: () => boolean, why: string) => {
+    const t0 = Date.now()
+    while (!cond()) {
+      if (Date.now() - t0 > 5000) throw new Error(`대기 초과: ${why}`)
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 25))
+      })
+    }
+  }
+  const enter = () => {
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    })
+  }
+  async function startManual(items: string[], style: 'continuous' | 'discrete') {
+    vi.stubGlobal('Worker', EchoWorker)
+    useApp.setState((st) => ({
+      settings: {
+        ...st.settings,
+        mode: 'typing',
+        durationMode: 'manual',
+        countdown: false,
+        fullscreen: false,
+        liveStats: false,
+        scoring: { ...st.settings.scoring, inputStyle: style },
+      },
+    }))
+    const ws = await repo.createWordset(`엔터${Date.now()}${Math.random()}`, items)
+    await act(async () => {
+      await useApp.getState().reloadWordsets()
+      useApp.getState().select(ws.id)
+      root.render(<App />)
+    })
+    act(() => {
+      useApp.getState().startPractice()
+    })
+    await act(async () => {})
+  }
+
+  it('정답이든 오답이든 엔터로만 전진, 엔터는 개행을 넣지 않는다', async () => {
+    await startManual(['가나', '다라'], 'continuous')
+    const ta = container.querySelector('textarea')!
+    expect(container.textContent).toContain('1 / 2')
+
+    // 아무것도 안 쳐도 시간으로는 안 넘어감
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(container.textContent).toContain('1 / 2')
+
+    // 오답을 치고 엔터 → 그래도 전진
+    act(() => {
+      ta.value = '가'
+      ta.dispatchEvent(new InputEvent('input', { bubbles: true, data: '가', inputType: 'insertText' }))
+    })
+    enter()
+    await waitFor(() => container.textContent?.includes('2 / 2') ?? false, '항목 2')
+    expect(ta.value).not.toContain('\n') // 엔터가 개행을 넣지 않음
+
+    // 마지막에서 엔터 → 채점 → 결과
+    act(() => {
+      ta.value = '가다라'
+      ta.dispatchEvent(new InputEvent('input', { bubbles: true, data: '다라', inputType: 'insertText' }))
+    })
+    enter()
+    await waitFor(() => useApp.getState().screen.name === 'result', '결과 화면')
+    const screen = useApp.getState().screen
+    if (screen.name !== 'result') throw new Error('unreachable')
+    // 첫 항목 '가'(오답), 둘째 '다라'(정답) — 부분 정답이 채점됨
+    expect(screen.record.result!.accuracy).toBeGreaterThan(0)
+    expect(screen.record.result!.accuracy).toBeLessThan(1)
+  })
+
+  it('속기 프로그램 개행 주입도 전진으로 처리 (개행 문자 흡수)', async () => {
+    await startManual(['하나', '둘'], 'discrete')
+    const ta = container.querySelector('textarea')!
+    act(() => {
+      ta.value = '하나\n' // 키 이벤트 없이 개행이 값에 주입된 경우
+      ta.dispatchEvent(new InputEvent('input', { bubbles: true, data: '\n', inputType: 'insertLineBreak' }))
+    })
+    await waitFor(() => container.textContent?.includes('2 / 2') ?? false, '개행 주입 전진')
+  })
+})
+
 describe('타이핑 세션 종료 흐름', () => {
   it('정상 워커(에코): 세션 종료 → 결과 화면 + 기록 저장', async () => {
     vi.stubGlobal('Worker', EchoWorker)

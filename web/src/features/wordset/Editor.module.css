@@ -67,9 +67,43 @@
 }
 
 .count {
-  margin-right: auto;
   color: var(--text-dim);
   font-size: 13px;
+}
+
+.modeSeg {
+  display: inline-flex;
+  margin-right: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.modeSeg button {
+  border: 0;
+  border-radius: 0;
+  padding: 5px 12px;
+  font-size: 13px;
+  background: transparent;
+}
+
+.modeSeg button + button {
+  border-left: 1px solid var(--border);
+}
+
+.modeOn {
+  background: var(--accent) !important;
+  color: var(--accent-text) !important;
+  font-weight: 600;
+}
+
+.textEdit {
+  width: 100%;
+  min-height: 360px;
+  resize: vertical;
+  font-size: 15px;
+  line-height: 1.7;
+  padding: 12px 14px;
 }
 
 .list {

@@ -146,4 +146,49 @@ describe('앱 통합 스모크', () => {
     await until(() => useApp.getState().screen.name === 'home')
     expect(text()).toContain('편집테스트')
   })
+
+  it('편집 화면 — 텍스트 편집 모드: 엔터로 나눈 통편집 → 저장', async () => {
+    await act(async () => {
+      root.render(<App />)
+    })
+    clickByText('새 단어장')
+    await act(async () => {})
+
+    const setV = (el: HTMLInputElement | HTMLTextAreaElement, v: string, proto: typeof HTMLInputElement.prototype | typeof HTMLTextAreaElement.prototype) => {
+      Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(el, v)
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    const nameInput = container.querySelector<HTMLInputElement>('input[placeholder="단어장 이름"]')!
+    act(() => setV(nameInput, '텍스트편집', HTMLInputElement.prototype))
+
+    // 텍스트 편집으로 전환 → 한 textarea 에 엔터로 나눠 입력
+    clickByText('텍스트 편집')
+    const ta = [...container.querySelectorAll('textarea')].pop()!
+    act(() => setV(ta, '문제 하나\n문제 둘\n문제 셋\n', HTMLTextAreaElement.prototype))
+    expect(text()).toContain('3개 항목') // 빈 줄 제외 카운트
+
+    clickByText('저장')
+    await until(() => useApp.getState().screen.name === 'home')
+    const ws = useApp.getState().wordsets.find((w) => w.name === '텍스트편집')!
+    expect(ws.items.map((i) => i.t)).toEqual(['문제 하나', '문제 둘', '문제 셋'])
+  })
+
+  it('편집 화면 — 목록↔텍스트 왕복에서 항목 보존', async () => {
+    const ws = await repo.createWordset('왕복', [{ t: '가' }, { t: '나', h: 'ㄴ' }])
+    await act(async () => {
+      await useApp.getState().reloadWordsets()
+      root.render(<App />)
+    })
+    useApp.getState().go({ name: 'edit', wordsetId: ws.id })
+    await act(async () => {})
+    clickByText('텍스트 편집')
+    const ta = [...container.querySelectorAll('textarea')].pop()!
+    // 힌트는 "본문<Tab>힌트" 로 직렬화되어 왕복 보존
+    expect(ta.value).toBe('가\n나\tㄴ')
+    clickByText('목록 편집')
+    clickByText('저장')
+    await until(() => useApp.getState().screen.name === 'home')
+    const after = useApp.getState().wordsets.find((w) => w.id === ws.id)!
+    expect(after.items).toEqual([{ t: '가' }, { t: '나', h: 'ㄴ' }])
+  })
 })

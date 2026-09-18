@@ -108,9 +108,14 @@ export default function Practice() {
     /** 엔진이 실제로 시작됐는가 — 이어하기 카운트다운 중 이탈 시 진행 유실 방지 */
     let engineBegun = false
 
-    // 무제한은 타이핑 전용 — 보기 모드로 열리면 자동 폴백
-    const effDurationMode = settings.durationMode === 'untimed' && !typing ? 'auto' : settings.durationMode
-    const untimed = effDurationMode === 'untimed'
+    // 무제한·엔터넘기기는 타이핑 전용 — 보기 모드로 열리면 자동 폴백
+    const effDurationMode =
+      (settings.durationMode === 'untimed' || settings.durationMode === 'manual') && !typing
+        ? 'auto'
+        : settings.durationMode
+    const untimed = effDurationMode === 'untimed' // 맞추면 자동 전진
+    const manual = effDurationMode === 'manual' // 엔터를 쳐야 전진
+    const itemPaced = untimed || manual // 시간 무한 + 항목 위치 기반 진행·실경과 KPM
 
     const cfg: TimelineConfig = {
       durationMode: effDurationMode,
@@ -215,8 +220,8 @@ export default function Practice() {
     function onItemBoundary(prevIndex: number) {
       const input = inputRef.current
       if (!typing || !input) return
-      // 무제한 모드는 명목 타임라인(하루/항목)이라 실경과로 KPM 산정
-      const liveElapsed = untimed
+      // 무제한·엔터넘기기는 명목 타임라인(하루/항목)이라 실경과로 KPM 산정
+      const liveElapsed = itemPaced
         ? Math.max(1, elapsedOffset + Math.round(engineRef.current?.elapsedMs(performance.now()) ?? 1))
         : (elapsedAtShow[prevIndex + 1] ?? 1)
       if (continuous) {
@@ -249,7 +254,7 @@ export default function Practice() {
       const input = inputRef.current
       if (!input || !engineRef.current) return
       setOverlay('scoring')
-      const elapsedMs = untimed
+      const elapsedMs = itemPaced
         ? Math.max(1000, elapsedOffset + Math.round(engineRef.current.elapsedMs(performance.now())))
         : engineRef.current.practiceMs
 
@@ -290,8 +295,8 @@ export default function Practice() {
         const cd = cdRef.current
         if (cd && cd.textContent) cd.textContent = ''
         if (i > 0) onItemBoundary(i - 1)
-        // 무제한: 진행바는 시간 대신 항목 위치로 (선형 매핑 — 스크럽과 동일 기준)
-        if (untimed && barRef.current) barRef.current.style.transform = `scaleX(${tl.showFraction(i)})`
+        // 무제한·엔터넘기기: 진행바는 시간 대신 항목 위치로 (선형 매핑 — 스크럽과 동일 기준)
+        if (itemPaced && barRef.current) barRef.current.style.transform = `scaleX(${tl.showFraction(i)})`
         const el = textRef.current
         if (el) {
           const fit = fits[i]
@@ -325,7 +330,7 @@ export default function Practice() {
         if (el) el.style.opacity = '0'
       },
       onProgress(frac) {
-        if (untimed) return // 명목 타임라인(하루/항목) — 시간 진행은 무의미
+        if (itemPaced) return // 명목 타임라인(하루/항목) — 시간 진행은 무의미
         const bar = barRef.current
         if (bar) bar.style.transform = `scaleX(${frac})`
       },
@@ -423,6 +428,23 @@ export default function Practice() {
       }
     }
 
+    // ---- 엔터로 넘기기(manual): 맞고 틀리고 무관하게 엔터로만 전진 ----
+    function advance() {
+      if (!manual || finished || overlayRef.current !== null) return
+      const input = inputRef.current
+      if (!input || input.isComposing()) return // 조합(예: 엔터로 IME 확정) 중엔 전진 금지
+      const i = Math.max(0, tl.currentIndex)
+      if (sound) playTick()
+      if (i + 1 < items.length) {
+        tl.seekTo(i + 1, performance.now()) // onShow → onItemBoundary(i) 가 경계·답 기록
+      } else {
+        finished = true
+        tl.stop()
+        if (textRef.current) textRef.current.style.opacity = '0'
+        finishTyping()
+      }
+    }
+
     // ---- 이어하기 저장 (종료·이탈 시) ----
     function saveResumeNow() {
       if (finished || finalized) return
@@ -443,7 +465,7 @@ export default function Practice() {
               }
             : { kind: 'discrete', answers: answers.slice(0, index) }
           : undefined,
-        ...(untimed
+        ...(itemPaced
           ? {
               elapsedMs:
                 elapsedOffset + (engineBegun ? Math.round(tl.elapsedMs(performance.now())) : 0),
@@ -462,7 +484,16 @@ export default function Practice() {
       tl.tick(performance.now())
       if (matchDirtyRef.current) {
         matchDirtyRef.current = false
-        checkMatch()
+        if (untimed) checkMatch()
+        else if (manual) {
+          // 키보드 엔터는 keydown 에서 preventDefault 되므로, 여기 걸리는 개행은
+          // 속기 프로그램이 개행 문자를 주입한 경우 — 개행을 제거하고 전진
+          const el = inputRef.current?.el()
+          if (el && el.value.includes('\n')) {
+            el.value = el.value.replace(/\n/g, '')
+            advance()
+          }
+        }
       }
       if (tl.running) raf = requestAnimationFrame(loop)
     }
@@ -509,6 +540,12 @@ export default function Practice() {
 
     const onKey = (e: KeyboardEvent) => {
       if (finished) return
+      // 엔터로 넘기기 — 엔터가 textarea 에 개행을 넣지 않도록 막고 전진 (IME 확정 엔터는 제외)
+      if (manual && e.key === 'Enter' && !e.isComposing && overlayRef.current === null) {
+        e.preventDefault()
+        advance()
+        return
+      }
       if (e.key === 'Escape') {
         // 어느 모드든 Esc = 일시정지 메뉴 (열려 있으면 재개는 버튼으로)
         if (overlayRef.current === null) pauseWithOverlay('menu')
@@ -634,7 +671,11 @@ export default function Practice() {
             style={{ fontSize: settings.inputFontPx }}
             className={s.input}
             placeholder={
-              settings.durationMode === 'untimed' ? '맞게 치고 띄어쓰기로 확정하면 다음으로 넘어갑니다' : ''
+              settings.durationMode === 'untimed'
+                ? '맞게 치고 띄어쓰기로 확정하면 다음으로 넘어갑니다'
+                : settings.durationMode === 'manual'
+                  ? '다 치고 엔터(Enter)를 누르면 다음으로 넘어갑니다'
+                  : ''
             }
             onDirty={() => {
               matchDirtyRef.current = true

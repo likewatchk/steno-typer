@@ -271,8 +271,9 @@ export default function Home() {
                   onChange={(mode) =>
                     patchSettings({
                       mode,
-                      // 무제한은 타이핑 전용 — 보기 모드로 바꾸면 자동으로 복귀
-                      ...(mode === 'view' && settings.durationMode === 'untimed'
+                      // 무제한·엔터넘기기는 타이핑 전용 — 보기 모드로 바꾸면 자동으로 복귀
+                      ...(mode === 'view' &&
+                      (settings.durationMode === 'untimed' || settings.durationMode === 'manual')
                         ? { durationMode: 'auto' as const }
                         : {}),
                     })
@@ -290,7 +291,8 @@ export default function Home() {
                         ? [
                             ['auto', '글자수 자동'],
                             ['fixed', '고정'],
-                            ['untimed', '무제한'],
+                            ['untimed', '맞추면 넘기기'],
+                            ['manual', '엔터로 넘기기'],
                           ]
                         : [
                             ['auto', '글자수 자동'],
@@ -316,6 +318,12 @@ export default function Home() {
                 {settings.durationMode === 'untimed' && (
                   <span className={s.hint}>
                     시간 제한 없음 — 맞게 치면 자동으로 다음 항목. 낱말 끝에 띄어쓰기를 치면 확정됩니다.
+                  </span>
+                )}
+                {settings.durationMode === 'manual' && (
+                  <span className={s.hint}>
+                    시간 제한 없음 — 한 항목을 다 치고 엔터(Enter)를 눌러야 다음으로 넘어갑니다.
+                    맞고 틀림과 무관하게 넘어가고, 채점은 끝난 뒤에 이뤄집니다.
                   </span>
                 )}
                 {settings.durationMode === 'auto' && (

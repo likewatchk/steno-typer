@@ -11,6 +11,24 @@ const SPLIT_LABEL: Record<SplitMode, string> = {
   eojeol: 'N어절씩 묶기',
 }
 
+/** 항목 배열 ↔ 텍스트(한 줄=한 문제, "본문 [Tab] 힌트") 상호 변환 */
+function itemsToText(items: WordItem[]): string {
+  return items.map((it) => (it.h ? `${it.t}\t${it.h}` : it.t)).join('\n')
+}
+function textToItems(text: string): WordItem[] {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line): WordItem | null => {
+      const tab = line.indexOf('\t')
+      const t = (tab >= 0 ? line.slice(0, tab) : line).replace(/\s+/g, ' ').trim()
+      if (!t) return null
+      const h = tab >= 0 ? line.slice(tab + 1).trim() : ''
+      return h ? { t, h } : { t }
+    })
+    .filter((x): x is WordItem => x !== null)
+}
+
 export default function Editor({ wordsetId }: { wordsetId: string | null }) {
   const { go, reloadWordsets, select } = useApp.getState()
   const existing = useApp((st) => st.wordsets.find((w) => w.id === wordsetId) ?? null)
@@ -22,7 +40,27 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
   const [splitMode, setSplitMode] = useState<SplitMode>('line')
   const [eojeolN, setEojeolN] = useState(2)
   const [dragOver, setDragOver] = useState(false)
+  // 편집 방식: 목록(행 단위) vs 텍스트(엔터로 나누는 통편집). 힌트 없는 예문 리스트는 텍스트가 편하다
+  const [editMode, setEditMode] = useState<'list' | 'text'>('list')
+  const [textDraft, setTextDraft] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // 텍스트 편집 중 실제 항목 수 (본문 있는 줄만)
+  const textCount = textDraft.split('\n').filter((l) => l.trim()).length
+  const itemCount = editMode === 'text' ? textCount : items.length
+
+  function toText() {
+    setTextDraft(itemsToText(items))
+    setEditMode('text')
+  }
+  function toList() {
+    mutate(textToItems(textDraft))
+    setEditMode('list')
+  }
+  function onTextDraft(v: string) {
+    setTextDraft(v)
+    setDirty(true)
+  }
 
   // 편집 중 이탈 방지 (브라우저 새로고침/닫기)
   useEffect(() => {
@@ -37,26 +75,22 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
     setDirty(true)
   }
 
-  function addBulk() {
-    let parsed: WordItem[]
-    if (splitMode === 'line') {
-      // 줄 단위에선 "원말 <TAB> 힌트" 표기를 지원
-      parsed = bulk
-        .replace(/\r\n?/g, '\n')
-        .split('\n')
-        .map((line): WordItem | null => {
-          const tab = line.indexOf('\t')
-          const t = (tab >= 0 ? line.slice(0, tab) : line).replace(/\s+/g, ' ').trim()
-          if (!t) return null
-          const h = tab >= 0 ? line.slice(tab + 1).trim() : ''
-          return h ? { t, h } : { t }
-        })
-        .filter((x): x is WordItem => x !== null)
+  /** 파싱된 항목을 현재 편집 버퍼(목록/텍스트)에 이어붙인다 */
+  function appendItems(added: WordItem[]) {
+    if (!added.length) return
+    if (editMode === 'text') {
+      setTextDraft((d) => (d ? d + '\n' : '') + itemsToText(added))
+      setDirty(true)
     } else {
-      parsed = splitText(bulk, splitMode, eojeolN).map((t) => ({ t }))
+      mutate([...items, ...added])
     }
+  }
+
+  function addBulk() {
+    const parsed =
+      splitMode === 'line' ? textToItems(bulk) : splitText(bulk, splitMode, eojeolN).map((t) => ({ t }))
     if (!parsed.length) return
-    mutate([...items, ...parsed])
+    appendItems(parsed)
     setBulk('')
   }
 
@@ -67,7 +101,7 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
       added.push(...parseFileContent(file.name, await file.arrayBuffer()))
       if (!name.trim() && file.name) setName(file.name.replace(/\.[^.]+$/, ''))
     }
-    if (added.length) mutate([...items, ...added])
+    appendItems(added)
   }
 
   function dedupe() {
@@ -91,7 +125,8 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
   }
 
   async function save() {
-    const cleanItems = items
+    const sourceItems = editMode === 'text' ? textToItems(textDraft) : items
+    const cleanItems = sourceItems
       .map((x) => ({ t: x.t.trim(), h: x.h?.trim() || undefined }))
       .filter((x) => x.t)
       .map((x) => (x.h ? x : { t: x.t }))
@@ -128,7 +163,16 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
           }}
         />
         {existing && (
-          <button onClick={() => downloadJson(`${name || 'wordset'}.json`, { name, items })}>내보내기</button>
+          <button
+            onClick={() =>
+              downloadJson(`${name || 'wordset'}.json`, {
+                name,
+                items: editMode === 'text' ? textToItems(textDraft) : items,
+              })
+            }
+          >
+            내보내기
+          </button>
         )}
         <button className="primary" onClick={() => void save()}>
           저장
@@ -196,61 +240,91 @@ export default function Editor({ wordsetId }: { wordsetId: string | null }) {
       </section>
 
       <div className={s.toolbar}>
-        <span className={`${s.count} num`}>{items.length}개 항목</span>
-        <button onClick={dedupe} disabled={!items.length}>
-          중복 제거
-        </button>
-        <button onClick={shuffle} disabled={items.length < 2}>
-          섞기
-        </button>
-        <button
-          onClick={() => {
-            if (confirm('모든 항목을 지울까요?')) mutate([])
-          }}
-          disabled={!items.length}
-        >
-          전체 삭제
-        </button>
+        <span className={`${s.count} num`}>{itemCount}개 항목</span>
+        <span className={s.modeSeg} role="group" aria-label="편집 방식">
+          <button
+            type="button"
+            className={editMode === 'list' ? s.modeOn : undefined}
+            onClick={() => editMode !== 'list' && toList()}
+          >
+            목록 편집
+          </button>
+          <button
+            type="button"
+            className={editMode === 'text' ? s.modeOn : undefined}
+            onClick={() => editMode !== 'text' && toText()}
+          >
+            텍스트 편집
+          </button>
+        </span>
+        {editMode === 'list' && (
+          <>
+            <button onClick={dedupe} disabled={!items.length}>
+              중복 제거
+            </button>
+            <button onClick={shuffle} disabled={items.length < 2}>
+              섞기
+            </button>
+            <button
+              onClick={() => {
+                if (confirm('모든 항목을 지울까요?')) mutate([])
+              }}
+              disabled={!items.length}
+            >
+              전체 삭제
+            </button>
+          </>
+        )}
       </div>
 
-      <section className={s.list}>
-        {items.length === 0 ? (
-          <p className={s.empty}>아직 항목이 없습니다. 위에 붙여넣거나 파일을 끌어오세요.</p>
-        ) : (
-          items.map((item, i) => (
-            <div key={i} className={s.item}>
-              <span className={`${s.itemNo} num`}>{i + 1}</span>
-              <input
-                type="text"
-                value={item.t}
-                onChange={(e) => {
-                  const next = [...items]
-                  next[i] = { ...next[i], t: e.target.value }
-                  mutate(next)
-                }}
-              />
-              <input
-                type="text"
-                className={s.itemHint}
-                placeholder="힌트"
-                value={item.h ?? ''}
-                onChange={(e) => {
-                  const next = [...items]
-                  next[i] = e.target.value ? { ...next[i], h: e.target.value } : { t: next[i].t }
-                  mutate(next)
-                }}
-              />
-              <button
-                className={s.itemDel}
-                aria-label={`${i + 1}번 삭제`}
-                onClick={() => mutate(items.filter((_, j) => j !== i))}
-              >
-                ×
-              </button>
-            </div>
-          ))
-        )}
-      </section>
+      {editMode === 'text' ? (
+        <textarea
+          className={s.textEdit}
+          value={textDraft}
+          onChange={(e) => onTextDraft(e.target.value)}
+          placeholder={'한 줄에 문제 하나 — 엔터로 나눕니다.\n힌트가 필요하면 "본문 [Tab] 힌트" 형식으로.'}
+          spellCheck={false}
+        />
+      ) : (
+        <section className={s.list}>
+          {items.length === 0 ? (
+            <p className={s.empty}>아직 항목이 없습니다. 위에 붙여넣거나 파일을 끌어오세요.</p>
+          ) : (
+            items.map((item, i) => (
+              <div key={i} className={s.item}>
+                <span className={`${s.itemNo} num`}>{i + 1}</span>
+                <input
+                  type="text"
+                  value={item.t}
+                  onChange={(e) => {
+                    const next = [...items]
+                    next[i] = { ...next[i], t: e.target.value }
+                    mutate(next)
+                  }}
+                />
+                <input
+                  type="text"
+                  className={s.itemHint}
+                  placeholder="힌트"
+                  value={item.h ?? ''}
+                  onChange={(e) => {
+                    const next = [...items]
+                    next[i] = e.target.value ? { ...next[i], h: e.target.value } : { t: next[i].t }
+                    mutate(next)
+                  }}
+                />
+                <button
+                  className={s.itemDel}
+                  aria-label={`${i + 1}번 삭제`}
+                  onClick={() => mutate(items.filter((_, j) => j !== i))}
+                >
+                  ×
+                </button>
+              </div>
+            ))
+          )}
+        </section>
+      )}
 
       <footer className={s.footer}>
         <button className="primary" onClick={() => void save()}>

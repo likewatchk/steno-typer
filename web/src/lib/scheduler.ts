@@ -10,11 +10,11 @@ import { toWordItem, type EngineItem, type RangeSpec, type Settings, type WordIn
 
 export type { EngineItem }
 
-/** '무제한' 모드의 항목당 명목 시간 — 자동 전환이 사실상 일어나지 않는 하루 */
+/** '무제한'·'엔터로 넘기기' 모드의 항목당 명목 시간 — 자동 전환이 사실상 일어나지 않는 하루 */
 export const UNTIMED_MS = 86_400_000
 
 export interface TimelineConfig {
-  durationMode: 'auto' | 'fixed' | 'untimed'
+  durationMode: 'auto' | 'fixed' | 'untimed' | 'manual'
   fixedMs: number
   autoBaseMs: number
   autoPerCharMs: number
@@ -41,7 +41,8 @@ export interface TimelineHooks {
 type Ev = { t: number; kind: 0 | 1 | 2 | 3; index: number } // 0=countdown 1=show 2=blank 3=done
 
 export function computeDuration(text: string, cfg: TimelineConfig): number {
-  if (cfg.durationMode === 'untimed') return UNTIMED_MS
+  // untimed·manual 모두 사용자 행동으로만 넘어가므로 자동 전환이 없는 명목 시간
+  if (cfg.durationMode === 'untimed' || cfg.durationMode === 'manual') return UNTIMED_MS
   if (cfg.durationMode === 'fixed') return cfg.fixedMs
   const chars = [...text].length
   const speed = Math.min(2, Math.max(0.2, cfg.autoSpeed ?? 1))
