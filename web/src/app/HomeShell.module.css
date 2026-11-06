@@ -1,0 +1,77 @@
+/* 소리자바 트랙 액센트 — 토큰만 덮어써서 하위 컴포넌트 전체에 적용 */
+.shell[data-track='sorijava'] {
+  --accent: #0d9488;
+  --accent-text: #ffffff;
+  --accent-dim: #ccfbf1;
+}
+
+:root[data-theme='dark'] .shell[data-track='sorijava'] {
+  --accent: #2dd4bf;
+  --accent-text: #042f2e;
+  --accent-dim: #12403c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .shell[data-track='sorijava'] {
+    --accent: #2dd4bf;
+    --accent-text: #042f2e;
+    --accent-dim: #12403c;
+  }
+}
+
+.shell {
+  min-height: 100%;
+}
+
+.bar {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 18px 24px 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.logo {
+  font-size: 20px;
+  font-weight: 700;
+  margin-right: auto;
+}
+
+.tabs {
+  display: inline-flex;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+.tab,
+.tabOn {
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 18px;
+  font-size: 14px;
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tabOn {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .bar {
+    padding: 14px 16px 0;
+  }
+  .logo {
+    font-size: 17px;
+  }
+}

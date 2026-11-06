@@ -11,6 +11,17 @@ export type Screen =
   | { name: 'result'; record: SessionRecord }
   | { name: 'free' } // 자유연습 (메모장형)
 
+/** 홈 최상위 탭 — 소리자바(신규 가이드) / 예전거(기존 깜빡이 전체) */
+export type Track = 'sorijava' | 'legacy'
+const TRACK_KEY = 'steno-track'
+function loadTrack(): Track {
+  try {
+    return localStorage.getItem(TRACK_KEY) === 'legacy' ? 'legacy' : 'sorijava'
+  } catch {
+    return 'sorijava'
+  }
+}
+
 export interface PracticePlan {
   wordset: Wordset
   items: EngineItem[]
@@ -28,8 +39,10 @@ interface AppState {
   planSeq: number
   /** 이어하기로 시작한 세션의 복원 정보 (Practice 가 마운트 시 소비) */
   resumeFrom: ResumeState | null
+  track: Track
 
   init(): Promise<void>
+  setTrack(track: Track): void
   go(screen: Screen): void
   select(id: string): void
   reloadWordsets(): Promise<void>
@@ -55,6 +68,7 @@ export const useApp = create<AppState>((set, get) => ({
   plan: null,
   planSeq: 0,
   resumeFrom: null,
+  track: loadTrack(),
 
   async init() {
     const [wordsets, settings, recent] = await Promise.all([
@@ -69,6 +83,15 @@ export const useApp = create<AppState>((set, get) => ({
       selectedId: wordsets[0]?.id ?? null,
       ready: true,
     })
+  },
+
+  setTrack(track) {
+    set({ track })
+    try {
+      localStorage.setItem(TRACK_KEY, track)
+    } catch {
+      /* 기억 실패해도 전환은 된다 */
+    }
   },
 
   go(screen) {

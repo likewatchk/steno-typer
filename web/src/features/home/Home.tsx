@@ -163,7 +163,7 @@ export default function Home() {
   return (
     <div className={s.page}>
       <header className={s.header}>
-        <span className={s.logo}>❤️ 나희의 속기 깜빡이</span>
+        <span className={s.logo}>깜빡이 연습</span>
         <button className="ghost" onClick={() => go({ name: 'free' })}>
           자유연습
         </button>

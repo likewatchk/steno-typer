@@ -1,5 +1,5 @@
 import { useApp } from './store.ts'
-import Home from '../features/home/Home.tsx'
+import HomeShell from './HomeShell.tsx'
 import Editor from '../features/wordset/Editor.tsx'
 import Practice from '../features/flash/Practice.tsx'
 import Result from '../features/scoring/Result.tsx'
@@ -14,7 +14,7 @@ export default function App() {
 
   switch (screen.name) {
     case 'home':
-      return <Home />
+      return <HomeShell />
     case 'edit':
       return <Editor wordsetId={screen.wordsetId} />
     case 'practice':

@@ -1,0 +1,248 @@
+.page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 24px 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ---- 히어로 ---- */
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 28px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--accent-dim), transparent 70%), var(--bg-elev);
+  border: 1px solid var(--border);
+}
+
+.eyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.25;
+}
+
+.lead {
+  margin: 0;
+  max-width: 620px;
+  color: var(--text-dim);
+}
+
+.badge {
+  margin-top: 4px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+/* ---- 세 영역 개념도 ---- */
+.chord {
+  margin: 0;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elev);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.zones {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.zone {
+  width: 112px;
+  padding: 12px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.zoneMid {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.zoneHand {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.zoneName {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.zoneKey {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.plus {
+  font-size: 22px;
+  color: var(--text-dim);
+}
+
+.result {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 34px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.caption {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* ---- 본문 그리드 ---- */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .page {
+    padding: 16px 16px 48px;
+  }
+  .hero {
+    padding: 20px;
+  }
+  .title {
+    font-size: 23px;
+  }
+  .zone {
+    width: 84px;
+  }
+  .zoneKey {
+    font-size: 24px;
+  }
+  .result {
+    width: 60px;
+    height: 60px;
+    font-size: 26px;
+  }
+}
+
+.h2 {
+  font-size: 15px;
+  margin: 0 0 10px;
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.step:last-child {
+  border-bottom: 0;
+}
+
+.stepNo {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stepBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.stepTitle {
+  font-weight: 600;
+}
+
+.stepDesc {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.soon {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.cardTitle {
+  font-weight: 600;
+}
+
+.cardDesc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
