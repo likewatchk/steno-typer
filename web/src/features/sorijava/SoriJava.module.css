@@ -4,7 +4,7 @@
   padding: 24px 24px 56px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 22px;
 }
 
 /* ---- 히어로 ---- */
@@ -12,8 +12,8 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
-  padding: 28px;
+  gap: 8px;
+  padding: 24px 28px;
   border-radius: 14px;
   background: linear-gradient(135deg, var(--accent-dim), transparent 70%), var(--bg-elev);
   border: 1px solid var(--border);
@@ -28,134 +28,99 @@
 
 .title {
   margin: 0;
-  font-size: 28px;
+  font-size: 26px;
   line-height: 1.25;
 }
 
 .lead {
   margin: 0;
-  max-width: 620px;
+  max-width: 680px;
   color: var(--text-dim);
 }
 
-.badge {
-  margin-top: 4px;
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--accent);
-  color: var(--accent);
-}
-
-/* ---- 세 영역 개념도 ---- */
-.chord {
+/* ---- 글쇠 배치 ---- */
+.kbd {
   margin: 0;
-  padding: 22px;
+  padding: 18px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg-elev);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-}
-
-.zones {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   gap: 12px;
-  flex-wrap: wrap;
 }
 
-.zone {
-  width: 112px;
-  padding: 12px 8px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--bg);
+.hands {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.hand {
   display: flex;
   flex-direction: column;
+  gap: 6px;
   align-items: center;
-  gap: 2px;
 }
 
-.zoneMid {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-}
-
-.zoneHand {
+.handLabel {
   font-size: 12px;
   color: var(--text-dim);
 }
 
-.zoneName {
-  font-size: 13px;
-  font-weight: 600;
+.keyRow {
+  display: flex;
+  gap: 6px;
 }
 
-.zoneKey {
-  font-size: 30px;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.plus {
-  font-size: 22px;
-  color: var(--text-dim);
-}
-
-.result {
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-size: 34px;
-  font-weight: 700;
+.key {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.keyOn {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.thumbs {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.thumbs .key {
+  border-radius: 999px;
+  height: 46px;
+}
+
+.thumbGap {
+  width: 14px;
 }
 
 .caption {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-dim);
 }
 
 /* ---- 본문 그리드 ---- */
 .grid {
   display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: 24px;
+  grid-template-columns: 1fr 400px;
+  gap: 22px;
   align-items: start;
-}
-
-@media (max-width: 760px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-  .page {
-    padding: 16px 16px 48px;
-  }
-  .hero {
-    padding: 20px;
-  }
-  .title {
-    font-size: 23px;
-  }
-  .zone {
-    width: 84px;
-  }
-  .zoneKey {
-    font-size: 24px;
-  }
-  .result {
-    width: 60px;
-    height: 60px;
-    font-size: 26px;
-  }
 }
 
 .h2 {
@@ -170,18 +135,32 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-elev);
+  overflow: hidden;
+}
+
+.steps li + li {
+  border-top: 1px solid var(--border);
 }
 
 .step {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
 }
 
-.step:last-child {
-  border-bottom: 0;
+.step:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.stepOn,
+.stepOn:hover {
+  background: var(--accent-dim);
 }
 
 .stepNo {
@@ -197,9 +176,16 @@
   justify-content: center;
 }
 
+.stepOn .stepNo {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
 .stepBody {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .stepTitle {
@@ -211,30 +197,174 @@
   color: var(--text-dim);
 }
 
-.soon {
+.stepCount {
   flex-shrink: 0;
   font-size: 12px;
   color: var(--text-dim);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 2px 9px;
 }
 
-.aside {
+/* ---- 설정 패널 ---- */
+.panel {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elev);
   display: flex;
   flex-direction: column;
+  gap: 14px;
+  position: sticky;
+  top: 12px;
+}
+
+.panelHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.panelNo {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.panelTitle {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.focus {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: -8px;
+}
+
+.tips {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.label b {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.dim {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.seg button {
+  border: 0;
+  border-radius: 0;
+  padding: 6px 12px;
+  background: transparent;
+}
+
+.seg button + button {
+  border-left: 1px solid var(--border);
+}
+
+.segOn {
+  background: var(--accent) !important;
+  color: var(--accent-text) !important;
+  font-weight: 600;
+}
+
+.toggles {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tasuRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.tasuRow input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.tasuNum {
+  width: 76px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: var(--text-dim);
+}
+
+.chipOn {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.start {
+  padding: 12px;
+  font-size: 16px;
+}
+
+/* ---- 다음 과정 ---- */
+.laterRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
 
 .card {
-  padding: 16px;
+  padding: 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-elev);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
 }
 
 .cardTitle {
@@ -245,4 +375,48 @@
   margin: 0;
   font-size: 13px;
   color: var(--text-dim);
+  flex: 1;
+}
+
+.soon {
+  font-size: 12px;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+@media (max-width: 860px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .panel {
+    position: static;
+  }
+  .laterRow {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .page {
+    padding: 16px 16px 48px;
+  }
+  .hero {
+    padding: 18px;
+  }
+  .title {
+    font-size: 22px;
+  }
+  .key {
+    width: 30px;
+    height: 32px;
+    font-size: 15px;
+  }
+  .hands {
+    gap: 14px;
+  }
+  .laterRow {
+    grid-template-columns: 1fr;
+  }
 }

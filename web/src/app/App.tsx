@@ -4,6 +4,7 @@ import Editor from '../features/wordset/Editor.tsx'
 import Practice from '../features/flash/Practice.tsx'
 import Result from '../features/scoring/Result.tsx'
 import FreePractice from '../features/typing/FreePractice.tsx'
+import SjPractice from '../features/sorijava/SjPractice.tsx'
 
 export default function App() {
   const ready = useApp((s) => s.ready)
@@ -24,5 +25,7 @@ export default function App() {
       return <Result record={screen.record} />
     case 'free':
       return <FreePractice />
+    case 'sjPractice':
+      return <SjPractice config={screen.config} />
   }
 }

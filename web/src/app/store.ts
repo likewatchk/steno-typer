@@ -3,6 +3,7 @@ import * as repo from '../lib/repo.ts'
 import { prepareItems, type EngineItem } from '../lib/scheduler.ts'
 import type { ResumeState, SessionRecord, Settings, Wordset } from '../lib/types.ts'
 import { DEFAULT_SETTINGS } from '../lib/types.ts'
+import type { SjConfig } from '../features/sorijava/sjPrefs.ts'
 
 export type Screen =
   | { name: 'home' }
@@ -10,6 +11,7 @@ export type Screen =
   | { name: 'practice' }
   | { name: 'result'; record: SessionRecord }
   | { name: 'free' } // 자유연습 (메모장형)
+  | { name: 'sjPractice'; config: SjConfig } // 소리자바 기본자리 따라치기
 
 /** 홈 최상위 탭 — 소리자바(신규 가이드) / 예전거(기존 깜빡이 전체) */
 export type Track = 'sorijava' | 'legacy'

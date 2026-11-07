@@ -58,13 +58,13 @@ describe('앱 통합 스모크', () => {
     await act(async () => {
       root.render(<App />)
     })
-    expect(text()).toContain('소리자바 연습 가이드')
+    expect(text()).toContain('기본자리연습 1~10단계')
     expect(text()).not.toContain('새 단어장')
     clickByText('예전거')
     expect(useApp.getState().track).toBe('legacy')
     expect(text()).toContain('새 단어장')
     clickByText('소리자바')
-    expect(text()).toContain('연습 단계')
+    expect(text()).toContain('기본자리연습')
     // 가이드에서 자유연습으로 바로 진입
     clickByText('자유연습 열기')
     await act(async () => {})
