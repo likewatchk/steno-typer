@@ -275,8 +275,8 @@ export default function SoriJava() {
             <span className={s.soon}>준비 중</span>
           </div>
           <div className={s.card}>
-            <div className={s.cardTitle}>문장 단위 연습</div>
-            <p className={s.cardDesc}>문장을 통째로 받아치는 실전형 연습입니다.</p>
+            <div className={s.cardTitle}>장문 연습</div>
+            <p className={s.cardDesc}>긴 글을 끊김 없이 받아치는 실전형 연습입니다.</p>
             <span className={s.soon}>준비 중</span>
           </div>
           <div className={s.card}>
