@@ -94,6 +94,14 @@ describe('buildSessionItems', () => {
     expect(items.length).toBe(20000)
   })
 
+  it("분량 '전부' — 범위 항목을 한 번씩, 누적이면 앞 단계에서 같은 수만큼 더", () => {
+    const own = buildSessionItems({ stage: 3, part: 'words', cumulative: false, shuffle: true, targetSyllables: 'all', rand: seeded() })
+    const expected = [...BASIC_STAGES[2].bookWords, ...BASIC_STAGES[2].extra]
+    expect(own.map((i) => i.t).sort()).toEqual(expected.slice().sort())
+    const cum = buildSessionItems({ stage: 3, part: 'words', cumulative: true, shuffle: true, targetSyllables: 'all', rand: seeded() })
+    expect(cum.length).toBe(expected.length * 2)
+  })
+
   it('섞기 끄면 교재 순서 그대로', () => {
     const items = buildSessionItems({ stage: 1, part: 'sentences', cumulative: false, shuffle: false, targetSyllables: 10 })
     expect(items[0].t).toBe(BASIC_STAGES[0].sentences[0])

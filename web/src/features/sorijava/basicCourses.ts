@@ -442,8 +442,8 @@ export interface BuildOptions {
   /** 누적: 앞 단계 항목도 섞어 넣는다 */
   cumulative: boolean
   shuffle: boolean
-  /** 목표 분량 (음절 수, 띄어쓰기·부호 제외) — 모자라면 다시 섞어 이어 붙인다 */
-  targetSyllables: number
+  /** 목표 분량 (채점 단위 수) — 모자라면 다시 섞어 이어 붙인다. 'all' = 범위의 항목을 한 번씩 전부 */
+  targetSyllables: number | 'all'
   rand?: () => number
 }
 
@@ -463,9 +463,12 @@ export function syllableCount(text: string, opts: ScoreOpts = {}): number {
 }
 
 /** 세션 목표 분량 — 타수 × 분, 하한 적용 */
-export function targetSyllablesFor(tasu: number, minutes: number): number {
-  return Math.max(MIN_SYLLABLES, tasu * minutes)
+export function targetSyllablesFor(tasu: number, minutes: Minutes): number | 'all' {
+  return minutes === 'all' ? 'all' : Math.max(MIN_SYLLABLES, tasu * minutes)
 }
+
+/** 분량 선택지 — 'all' = 범위 전부 한 번씩 (기본), 숫자 = 목표 타수로 그 분량(분) */
+export type Minutes = 'all' | 1 | 2 | 3 | 5
 
 /** 항목 수 안전 상한 — 분량 목표가 비정상이어도 무한히 늘지 않게 */
 const MAX_ITEMS = 20_000
@@ -484,6 +487,11 @@ export function buildSessionItems(o: BuildOptions): SjItem[] {
   const prev =
     o.cumulative && o.stage > 1 ? BASIC_STAGES.filter((s) => s.no < o.stage).flatMap((s) => stageItems(s, o.part)) : []
   const opts = scoreOptsFor(o.part)
+  // 전부 = 한 바퀴 (현재 단계 전부 + 누적이면 앞 단계에서 같은 수만큼)
+  if (o.targetSyllables === 'all') {
+    const pool = prev.length > 0 ? [...own, ...shuffle(prev, rand).slice(0, own.length)] : own
+    return o.shuffle ? shuffle(pool, rand) : pool.slice()
+  }
   const target = Number.isNaN(o.targetSyllables) ? 1 : Math.max(1, o.targetSyllables) // Infinity 는 MAX_ITEMS 가 막는다
   const out: SjItem[] = []
   let total = 0

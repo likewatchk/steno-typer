@@ -19,6 +19,8 @@ describe('sjPrefs', () => {
     expect(sanitizeSj(null)).toEqual(DEFAULT_SJ)
     expect(sanitizeSj('garbage')).toEqual(DEFAULT_SJ)
     expect(sanitizeSj({ minutes: 4 }).minutes).toBe(DEFAULT_SJ.minutes)
+    expect(sanitizeSj({ minutes: 'all' }).minutes).toBe('all')
+    expect(sanitizeSj({ minutes: '3' }).minutes).toBe(3)
     // 문자열 불리언은 양쪽 다 같은 규칙
     expect(sanitizeSj({ shuffle: 'false', cumulative: 'true' })).toMatchObject({ shuffle: false, cumulative: true })
     expect(sanitizeSj({ shuffle: 'maybe' }).shuffle).toBe(DEFAULT_SJ.shuffle)

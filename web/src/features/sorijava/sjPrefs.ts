@@ -1,5 +1,5 @@
 /** 소리자바 기본자리 연습 설정 — 기기별 로컬 기억 */
-import type { CoursePart } from './basicCourses.ts'
+import type { CoursePart, Minutes } from './basicCourses.ts'
 
 export interface SjConfig {
   stage: number
@@ -10,8 +10,8 @@ export interface SjConfig {
   shuffle: boolean
   /** 목표 타수 — 분당 음절 (10~400) */
   tasu: number
-  /** 분량 — 목표 타수로 몇 분 치는 양인가 */
-  minutes: number
+  /** 분량 — 'all' = 범위 전부 한 번씩, 숫자 = 목표 타수로 몇 분 치는 양인가 */
+  minutes: Minutes
   /** flow = 타수 속도로 글이 나타남 / all = 처음부터 전부 보임 */
   reveal: 'flow' | 'all'
 }
@@ -25,7 +25,7 @@ export const DEFAULT_SJ: SjConfig = {
   cumulative: false,
   shuffle: true,
   tasu: 100,
-  minutes: 1,
+  minutes: 'all',
   reveal: 'flow',
 }
 
@@ -36,7 +36,7 @@ export function clampTasu(n: number): number {
   return Math.min(TASU_MAX, Math.max(TASU_MIN, Math.round(n)))
 }
 
-export const MINUTES_CHOICES = [1, 2, 3, 5] as const
+export const MINUTES_CHOICES: readonly Minutes[] = ['all', 1, 2, 3, 5]
 const PARTS: CoursePart[] = ['words', 'abbr', 'sentences', 'mix']
 
 /** 저장값이 손상돼 있어도 안전한 설정으로 — 모든 필드를 화이트리스트/범위로 정리 */
@@ -52,7 +52,7 @@ export function sanitizeSj(raw: unknown): SjConfig {
     cumulative: bool(v.cumulative, DEFAULT_SJ.cumulative),
     shuffle: bool(v.shuffle, DEFAULT_SJ.shuffle),
     tasu: clampTasu(num(v.tasu)),
-    minutes: (MINUTES_CHOICES as readonly number[]).includes(minutes) ? minutes : DEFAULT_SJ.minutes,
+    minutes: v.minutes === 'all' ? 'all' : (MINUTES_CHOICES as readonly unknown[]).includes(minutes) ? (minutes as Minutes) : DEFAULT_SJ.minutes,
     reveal: v.reveal === 'all' ? 'all' : 'flow',
   }
 }

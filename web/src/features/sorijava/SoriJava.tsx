@@ -105,10 +105,13 @@ export default function SoriJava() {
     cfg.cumulative && cfg.stage > 1
       ? BASIC_STAGES.filter((st) => st.no < cfg.stage).reduce((n, st) => n + stageItems(st, cfg.part).length, 0)
       : 0
-  const volume = targetSyllablesFor(cfg.tasu, cfg.minutes)
   const scoreOpts = scoreOptsFor(cfg.part)
-  const avgSyl =
-    stageItems(stage, cfg.part).reduce((n, it) => n + syllableCount(it.t, scoreOpts), 0) / Math.max(1, ownCount)
+  const ownSyl = stageItems(stage, cfg.part).reduce((n, it) => n + syllableCount(it.t, scoreOpts), 0)
+  const avgSyl = ownSyl / Math.max(1, ownCount)
+  const target = targetSyllablesFor(cfg.tasu, cfg.minutes)
+  // 전부: 현재 단계 전부 + (누적이면) 앞 단계에서 같은 수만큼 → 대략 두 배
+  const volume = target === 'all' ? Math.round(ownSyl * (prevCount > 0 ? 2 : 1)) : target
+  const estMin = volume / cfg.tasu
 
   function start() {
     saveSj(cfg)
@@ -234,13 +237,14 @@ export default function SoriJava() {
             <div className={s.seg} role="group" aria-label="분량">
               {MINUTES_CHOICES.map((mm) => (
                 <button key={mm} className={cfg.minutes === mm ? s.segOn : ''} onClick={() => patch({ minutes: mm })}>
-                  {mm}분
+                  {mm === 'all' ? '전부' : `${mm}분`}
                 </button>
               ))}
             </div>
             <span className={s.dim}>
-              {cfg.tasu}타로 {cfg.minutes}분 ≈ {volume}음절 · 이 범위 {ownCount}항목(평균 {avgSyl.toFixed(1)}음절)
-              {prevCount > 0 && ` + 앞 단계 ${prevCount}항목에서 같은 수만큼`}
+              {cfg.minutes === 'all'
+                ? `이 범위 ${ownCount}항목 전부 한 번씩${prevCount > 0 ? ` + 앞 단계 ${prevCount}항목에서 ${ownCount}개` : ''} ≈ ${volume}음절 · ${cfg.tasu}타로 약 ${estMin < 1 ? '1분 미만' : `${Math.round(estMin)}분`}`
+                : `${cfg.tasu}타로 ${cfg.minutes}분 ≈ ${volume}음절 · 이 범위 ${ownCount}항목(평균 ${avgSyl.toFixed(1)}음절)${prevCount > 0 ? ` + 앞 단계 ${prevCount}항목에서 같은 수만큼` : ''}`}
             </span>
           </div>
 
