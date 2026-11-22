@@ -5,10 +5,15 @@
  * - 채점은 속기 시험 기준 실시간 (liveAlign.ts). 약어 범위에서는 부호도 채점한다.
  * - 목표 타수(분당 음절)로 페이스 표시가 움직이고, '흐르기'면 글이 그 속도로 나타난다.
  * - 입력은 StenoInput (속기계 주입 방어) — 값은 rAF 에서 한 번에 읽는다.
+ * - 조합 중인 마지막 음절: 점수(오자·탈자·첨가·정확도)에는 넣지 않지만 화면에는 잠정 반영한다.
+ *   IME 는 다음 음절 첫 키까지 앞 음절을 조합 상태로 두므로, 확정만 기다리면 화면이 항상 한 글자
+ *   늦어 "고쳐 쳤는데 반영이 안 된다"고 느낀다. 아직 맞을 수 있으면 잠정 정답(.tent), 완성형인데
+ *   이미 틀렸으면 오자로 바로 보여 준다.
  * - 본문(수천 span)은 채점·위치가 바뀔 때만 다시 그린다. 시계 틱은 통계만 갱신.
  */
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useApp } from '../../app/store.ts'
+import { canBecomeSyllable, decomposeSyllable } from '../../lib/hangul.ts'
 import StenoInput, { type StenoInputHandle } from '../typing/StenoInput.tsx'
 import { BASIC_STAGES, PART_LABEL, buildSessionItems, scoreOptsFor, targetSyllablesFor, type SjItem } from './basicCourses.ts'
 import {
@@ -82,7 +87,24 @@ function makeSession(cfg: SjConfig): Session {
   return { items, opts, chars: t.chars, normOf: t.normOf, norm: t.norm, wordOfChar, wordOfNorm, itemOfNorm, charOfNorm }
 }
 
-const EMPTY: AlignResult = { status: new Uint8Array(0), end: 0, ok: 0, sub: 0, miss: 0, ins: 0, typed: 0, tailExtra: false }
+const EMPTY: AlignResult = { status: new Uint8Array(0), end: 0, ok: 0, sub: 0, miss: 0, ins: 0, typed: 0, tailExtra: false, lastJ: -1 }
+
+/** 화면용 정렬 — 확정 입력(res)과 달리 조합 중인 음절까지 넣은 결과 + 그 음절이 맞붙은 자리의 표시 방식 */
+interface LiveView {
+  res: AlignResult
+  /** 조합 중 음절이 맞붙은 원문 채점 인덱스, 없으면 -1 */
+  compAt: number
+  /** 그 자리에 강제할 클래스 — 잠정 정답(.tent)·아직 모름(.pending). null 이면 정렬 결과(오자) 그대로 */
+  compCls: string | null
+}
+const EMPTY_VIEW: LiveView = { res: EMPTY, compAt: -1, compCls: null }
+
+/** 조합 중 글자 `comp` 를 원문 `target` 자리에 어떻게 보일지 */
+function composingClass(comp: string, target: string): string | null {
+  if (canBecomeSyllable(comp, target)) return s.tent
+  // 완성형(또는 한글 아님)인데 못 맞추는 글자는 바로 오자로 — 홑자모는 아직 모르니 흐릿하게
+  return decomposeSyllable(comp) || !/^[ㄱ-ㅎㅏ-ㅣ]$/u.test(comp) ? null : s.pending
+}
 
 /** 부호 타법 힌트인가 — 부호를 채점하지 않는 범위(전부 섞기)에서는 숨긴다 */
 const PUNCT_HINT_RE = /띄어쓰기|마침표|쉼표|[!%-]:/
@@ -116,6 +138,8 @@ function Run({ config, onRestart }: { config: SjConfig; onRestart: () => void })
   // 세션 본문은 state 로 한 번만 만든다 (섞기 결과와 채점기의 원문이 항상 같은 것을 가리키게)
   const [sess] = useState(() => makeSession(config))
   const [aligner] = useState(() => new LiveAligner(sess.norm))
+  // 조합 중 음절까지 넣은 화면용 정렬기 — 확정 정렬기와 행을 따로 가져 타건마다 1행씩만 더 계산한다
+  const [viewAligner] = useState(() => new LiveAligner(sess.norm))
   const m = sess.norm.length
   const stage = BASIC_STAGES.find((st) => st.no === config.stage)!
 
@@ -123,6 +147,7 @@ function Run({ config, onRestart }: { config: SjConfig; onRestart: () => void })
   const boxRef = useRef<HTMLDivElement>(null)
 
   const [res, setRes] = useState<AlignResult>(EMPTY)
+  const [view, setView] = useState<LiveView>(EMPTY_VIEW)
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [now, setNow] = useState(0)
   const [ended, setEnded] = useState<Ended | null>(null)
@@ -137,9 +162,10 @@ function Run({ config, onRestart }: { config: SjConfig; onRestart: () => void })
     const h = inputRef.current
     if (!h) return null
     const raw = final ? stripDanglingJamo(h.value()) : h.value()
-    let typed = normalizeTyped(raw, sess.opts)
-    // 조합 중인 마지막 음절은 아직 미완성 — 채점에서 뺀다 (종료 시엔 포함)
-    if (!final && h.isComposing() && typed.length > 0) typed = typed.slice(0, -1)
+    const all = normalizeTyped(raw, sess.opts)
+    // 조합 중인 마지막 음절은 아직 미완성 — 점수에서는 뺀다 (종료 시엔 포함)
+    const composing = !final && h.isComposing() && all.length > 0
+    const typed = composing ? all.slice(0, -1) : all
     const t = performance.now()
     if (startedRef.current === null && raw.trim().length > 0) {
       startedRef.current = t
@@ -148,6 +174,17 @@ function Run({ config, onRestart }: { config: SjConfig; onRestart: () => void })
     setNow(t) // 내 타수가 시계 틱(0.1초)을 기다리지 않게
     const r = aligner.update(typed)
     setRes(r)
+    if (!composing) {
+      setView({ res: r, compAt: -1, compCls: null })
+    } else {
+      // 화면은 조합 중 음절까지 — 고쳐 치는 즉시 색이 바뀌고 커서가 나아간다
+      const v = viewAligner.update(all)
+      const comp = all[all.length - 1]
+      // 중복 타건(이미 맞은 자리에 다시 맞붙고 커서도 안 나아감)은 그 글자를 잠정으로 되돌리지 않는다
+      const dup = v.lastJ >= 0 && v.end <= r.end && r.status[v.lastJ] === ST_OK
+      const compAt = dup ? -1 : v.lastJ
+      setView({ res: v, compAt, compCls: compAt >= 0 ? composingClass(comp, sess.norm[compAt]) : null })
+    }
     return r
   }
 
@@ -211,16 +248,18 @@ function Run({ config, onRestart }: { config: SjConfig; onRestart: () => void })
   const pace = startedAt === null ? 0 : Math.min(m, Math.floor(minutes * config.tasu))
   const myTasu = tasuOf(res.typed, minutes)
   const liveAcc = examAccuracy(res, res.end)
-  const gap = res.end - pace
+  // 위치(커서·진행·페이스 차·공개 범위)는 조합 중 음절까지 반영한 화면용 결과로
+  const viewEnd = view.res.end
+  const gap = viewEnd - pace
 
   // 흐르기: 페이스(또는 내 위치) 낱말 + 다음 낱말까지만 보인다
   const revealWord =
     config.reveal === 'all' || ended !== null
       ? Number.MAX_SAFE_INTEGER
-      : (m === 0 ? 0 : sess.wordOfNorm[Math.min(Math.max(pace, res.end), m - 1)]) + 1
-  const curChar = res.end < m ? sess.charOfNorm[res.end] : sess.chars.length
+      : (m === 0 ? 0 : sess.wordOfNorm[Math.min(Math.max(pace, viewEnd), m - 1)]) + 1
+  const curChar = viewEnd < m ? sess.charOfNorm[viewEnd] : sess.chars.length
   const paceChar = startedAt !== null && pace < m ? sess.charOfNorm[pace] : -1
-  const curItem = sess.items[sess.itemOfNorm[Math.min(res.end, m - 1)] ?? 0]
+  const curItem = sess.items[sess.itemOfNorm[Math.min(viewEnd, m - 1)] ?? 0]
 
   // 현재 위치가 보이도록 본문 스크롤
   useLayoutEffect(() => {
@@ -267,7 +306,7 @@ function Run({ config, onRestart }: { config: SjConfig; onRestart: () => void })
       </header>
 
       <div className={s.progress} aria-hidden>
-        <div className={s.progressMine} style={{ width: `${m ? (res.end / m) * 100 : 0}%` }} />
+        <div className={s.progressMine} style={{ width: `${m ? (viewEnd / m) * 100 : 0}%` }} />
         {startedAt !== null && <div className={s.progressPace} style={{ left: `${m ? (pace / m) * 100 : 0}%` }} />}
       </div>
 
@@ -276,7 +315,9 @@ function Run({ config, onRestart }: { config: SjConfig; onRestart: () => void })
           chars={sess.chars}
           normOf={sess.normOf}
           wordOfChar={sess.wordOfChar}
-          res={res}
+          res={view.res}
+          compAt={view.compAt}
+          compCls={view.compCls}
           curChar={ended === null ? curChar : -1}
           paceChar={paceChar}
           revealWord={revealWord}
@@ -348,7 +389,11 @@ const TargetText = memo(function TargetText(p: {
   chars: string[]
   normOf: Int32Array
   wordOfChar: Int32Array
+  /** 조합 중 음절까지 넣은 화면용 정렬 결과 */
   res: AlignResult
+  /** 조합 중 음절이 맞붙은 채점 인덱스(-1 = 없음)와 그 자리에 강제할 클래스 */
+  compAt: number
+  compCls: string | null
   /** -1 = 커서 표시 안 함 (종료) */
   curChar: number
   paceChar: number
@@ -364,7 +409,8 @@ const TargetText = memo(function TargetText(p: {
         let cls = s.pending
         if (n >= 0) {
           const st = n < res.end ? status[n] : 0
-          if (st === ST_OK) cls = s.ok
+          if (n === p.compAt && p.compCls) cls = p.compCls
+          else if (st === ST_OK) cls = s.ok
           else if (st === ST_SUB) cls = s.sub
           else if (st === ST_MISS) cls = s.miss
         } else if (i < cursorAt) cls = s.ok // 지나온 공백·부호

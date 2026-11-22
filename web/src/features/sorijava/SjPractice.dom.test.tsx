@@ -59,6 +59,26 @@ async function typeAll(value: string) {
   await frames()
 }
 
+/** IME 조합 중 상태로 값을 넣는다 (compositionstart 뒤 input) */
+async function composeTo(value: string) {
+  const ta = container.querySelector('textarea')!
+  act(() => {
+    ta.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(ta, value)
+    ta.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await frames()
+}
+
+/** 조합 확정 */
+async function commit() {
+  const ta = container.querySelector('textarea')!
+  act(() => {
+    ta.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' }))
+  })
+  await frames()
+}
+
 async function open(cfg: SjConfig = CFG) {
   await act(async () => {
     useApp.getState().go({ name: 'sjPractice', config: cfg })
@@ -191,6 +211,48 @@ describe('소리자바 따라치기', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
     expect(text()).toContain('연습 결과')
+  })
+
+  it('조합 중인 음절도 화면에 바로 반영 — 오타를 고쳐 치면 확정 전에 빨강이 사라진다 (점수는 확정분만)', async () => {
+    await open()
+    // 원문 '그자가 다 …' 에서 '다' 대신 '티라' 를 침 → '다' 자리에 오자, 첨가 1
+    await typeAll('그자가티라')
+    expect(count(s.sub)).toBe(1)
+    expect(text()).toContain('오자 1')
+    // '다' 를 조합 중 (아직 미확정): 화면은 잠정 정답으로 바뀌고 커서가 '주' 로 간다
+    await composeTo('그자가티라다')
+    expect(count(s.sub)).toBe(0)
+    expect(count(s.tent)).toBe(1)
+    expect(text()).toContain('오자 1') // 점수는 아직 확정분(티라)
+    const cur = container.querySelector<HTMLElement>(`[data-testid="sj-target"] .${s.cur}`)!
+    expect(cur.textContent).toBe('주')
+    // 확정되면 정답색, 점수도 갱신
+    await commit()
+    expect(count(s.tent)).toBe(0)
+    expect(count(s.sub)).toBe(0)
+    expect(text()).toContain('오자 0')
+    expect(text()).toContain('첨가 2')
+  })
+
+  it('조합 중 글자 — 아직 맞을 수 있으면 잠정, 완성형인데 틀렸으면 바로 오자, 홑자모가 다르면 흐릿', async () => {
+    await open()
+    await typeAll('그자가')
+    await composeTo('그자가ㄷ') // '다' 가 될 수 있다
+    expect(count(s.tent)).toBe(1)
+    await composeTo('그자가담') // 받침 ㅁ 은 다음 음절로 넘어갈 수 있다
+    expect(count(s.tent)).toBe(1)
+    expect(count(s.sub)).toBe(0)
+    await composeTo('그자가티') // 완성형인데 '다' 가 못 된다 → 오자
+    expect(count(s.tent)).toBe(0)
+    expect(count(s.sub)).toBe(1)
+    expect(text()).toContain('오자 0') // 점수는 미확정이라 그대로
+    await composeTo('그자가ㅌ') // 홑자모가 다르면 아직 모름
+    expect(count(s.sub)).toBe(0)
+    expect(count(s.tent)).toBe(0)
+    // 이미 맞은 마지막 글자를 조합 중에 한 번 더 쳐도(중복 타건) 그 글자가 잠정으로 되돌아가지 않는다
+    await composeTo('그자가가')
+    expect(count(s.tent)).toBe(0)
+    expect(count(s.ok)).toBeGreaterThanOrEqual(3)
   })
 
   it('약어 범위는 부호도 채점한다 (마침표 빠뜨리면 탈자)', async () => {

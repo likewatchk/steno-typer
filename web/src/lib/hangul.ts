@@ -61,6 +61,46 @@ export function composeSyllable(cho: string, jung: string, jong: string): string
   return String.fromCodePoint(SYLLABLE_BASE + ci * 21 * 28 + ji * 28 + ti)
 }
 
+/** 겹모음의 첫 모음 — 'ㅗ' 를 치는 중이면 아직 'ㅘ' 가 될 수 있다 */
+const VOWEL_FIRST: Record<string, string> = { ㅘ: 'ㅗ', ㅙ: 'ㅗ', ㅚ: 'ㅗ', ㅝ: 'ㅜ', ㅞ: 'ㅜ', ㅟ: 'ㅜ', ㅢ: 'ㅡ' }
+/** 겹받침의 첫 자음 */
+const JONG_FIRST: Record<string, string> = {
+  ㄳ: 'ㄱ',
+  ㄵ: 'ㄴ',
+  ㄶ: 'ㄴ',
+  ㄺ: 'ㄹ',
+  ㄻ: 'ㄹ',
+  ㄼ: 'ㄹ',
+  ㄽ: 'ㄹ',
+  ㄾ: 'ㄹ',
+  ㄿ: 'ㄹ',
+  ㅀ: 'ㄹ',
+  ㅄ: 'ㅂ',
+}
+
+/**
+ * 조합 중인 글자 `partial` 이 계속 치면 `target` 음절이 될 수 있는가.
+ *
+ * IME 는 다음 음절 첫 키가 들어올 때까지 앞 음절을 조합 상태로 두므로, 조합 중 글자를 그대로
+ * 채점하면 '치마' 를 치는 동안 '침' 이 잠깐 오자로 보인다. 여기서 "아직 맞을 수 있는" 경우를 가려
+ * 잠정 정답으로 보여 주기 위한 판정:
+ * - 홑초성 'ㅊ' → '치'·'침' (초성이 같다)
+ * - '치' → '침' (받침이 더 붙을 수 있다), '고' → '과' (겹모음)
+ * - '침' → '치' (받침 ㅁ 이 다음 음절 초성으로 넘어간다), '닭' → '달' (겹받침 뒤 자음이 넘어간다)
+ * - '달' → '닭' (겹받침이 더 붙는다)
+ */
+export function canBecomeSyllable(partial: string, target: string): boolean {
+  if (partial === target) return true
+  const t = decomposeSyllable(target)
+  if (!t) return false
+  const p = decomposeSyllable(partial)
+  if (!p) return (CHOSEONG as readonly string[]).includes(partial) && partial === t[0]
+  if (p[0] !== t[0]) return false
+  if (p[1] !== t[1]) return p[2] === '' && VOWEL_FIRST[t[1]] === p[1]
+  if (p[2] === t[2] || p[2] === '' || t[2] === '') return true
+  return JONG_FIRST[t[2]] === p[2] || JONG_FIRST[p[2]] === t[2]
+}
+
 /** 문자열 → 자모 시퀀스. 한글 음절은 초/중/종으로 펼치고 그 외 문자는 그대로. */
 export function toJamos(text: string): string[] {
   const out: string[] = []

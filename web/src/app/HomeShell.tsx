@@ -19,7 +19,7 @@ export default function HomeShell() {
   return (
     <div className={s.shell} data-track={track}>
       <nav className={s.bar} aria-label="연습 구분">
-        <span className={s.logo}>❤️ 나희의 속기 깜빡이</span>
+        <span className={s.logo}>⌨️ 나희의 속기 깜빡이</span>
         <span className={s.tabs} role="tablist">
           {TABS.map(([t, label]) => (
             <button

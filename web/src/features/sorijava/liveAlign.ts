@@ -69,6 +69,8 @@ export interface AlignResult {
   typed: number
   /** 마지막 입력이 없어도 이미 같은 비용으로 원문 끝에 닿아 있었다 — 마지막 입력은 꼬리 첨가 (자동 완주 금지 근거) */
   tailExtra: boolean
+  /** 마지막 입력 음절이 맞붙은 원문 인덱스(OK/오자 자리). 첨가로 처리됐거나 입력이 없으면 -1 — 조합 중 글자 잠정 표시용 */
+  lastJ: number
 }
 
 /** 입력 길이 상한 — 붙여넣기·주입 폭주로 메모리가 원문×입력으로 커지는 것을 막는다 (그 이상 첨가는 잡음) */
@@ -121,7 +123,7 @@ export class LiveAligner {
     const n = this.typed.length
     const m = this.m
     const status = new Uint8Array(m)
-    if (n === 0) return { status, end: 0, ok: 0, sub: 0, miss: 0, ins: 0, typed: 0, tailExtra: false }
+    if (n === 0) return { status, end: 0, ok: 0, sub: 0, miss: 0, ins: 0, typed: 0, tailExtra: false, lastJ: -1 }
     const last = this.rows[n]
     // 끝 위치: 비용 최소 중에서
     //  1) 마지막 입력이 원문과 '맞아떨어지는' 가장 먼 곳 — 사용자가 실제로 거기까지 쳤다는 뜻
@@ -150,6 +152,7 @@ export class LiveAligner {
     let sub = 0
     let miss = 0
     let ins = 0
+    let lastJ = -1
     const t = this.target
     while (i > 0 || j > 0) {
       const cur = this.rows[i][j]
@@ -159,6 +162,7 @@ export class LiveAligner {
           status[j - 1] = same ? ST_OK : ST_SUB
           if (same) ok++
           else sub++
+          if (i === n) lastJ = j - 1
           i--
           j--
           continue
@@ -175,7 +179,7 @@ export class LiveAligner {
     }
     // 직전 입력이 이미 끝에 닿아 있고 거기서 1(첨가)만 더한 것이 최적 비용이면, 지금 친 글자는 끝에 덧붙은 첨가다
     const tailExtra = end === m && n > 1 && this.rows[n - 1][m] + 1 === best
-    return { status, end, ok, sub, miss, ins, typed: n, tailExtra }
+    return { status, end, ok, sub, miss, ins, typed: n, tailExtra, lastJ }
   }
 }
 

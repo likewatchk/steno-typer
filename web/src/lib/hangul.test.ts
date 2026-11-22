@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  canBecomeSyllable,
   CHOSEONG,
   JONGSEONG,
   JUNGSEONG,
@@ -76,5 +77,29 @@ describe('타수', () => {
   it('한글 외 문자·공백은 1타', () => {
     expect(countKeystrokes('a b')).toBe(3)
     expect(countKeystrokes('간 다')).toBe(6) // 3 + 1 + 2
+  })
+})
+
+describe('canBecomeSyllable — 조합 중 글자가 아직 목표 음절이 될 수 있는가', () => {
+  it('같은 초성의 홑자모 → 된다, 다른 초성·홑모음 → 안 된다', () => {
+    expect(canBecomeSyllable('ㅊ', '치')).toBe(true)
+    expect(canBecomeSyllable('ㅊ', '침')).toBe(true)
+    expect(canBecomeSyllable('ㅌ', '치')).toBe(false)
+    expect(canBecomeSyllable('ㅣ', '치')).toBe(false)
+  })
+  it('받침이 더 붙거나(치→침) 다음 음절로 넘어가거나(침→치) 겹모음·겹받침이 이어질 수 있다', () => {
+    expect(canBecomeSyllable('치', '침')).toBe(true)
+    expect(canBecomeSyllable('침', '치')).toBe(true)
+    expect(canBecomeSyllable('고', '과')).toBe(true)
+    expect(canBecomeSyllable('달', '닭')).toBe(true)
+    expect(canBecomeSyllable('닭', '달')).toBe(true)
+    expect(canBecomeSyllable('치', '치')).toBe(true)
+  })
+  it('이미 틀린 완성형은 안 된다', () => {
+    expect(canBecomeSyllable('티', '치')).toBe(false)
+    expect(canBecomeSyllable('침', '칩')).toBe(false)
+    expect(canBecomeSyllable('곰', '과')).toBe(false) // 받침이 있으면 겹모음으로 못 간다
+    expect(canBecomeSyllable('가', '3')).toBe(false)
+    expect(canBecomeSyllable('3', '3')).toBe(true)
   })
 })

@@ -113,6 +113,19 @@ describe('LiveAligner — 시험 기준', () => {
     expect(buildTarget('25%', { punct: true }).norm.join('')).toBe('25%')
   })
 
+  it('lastJ — 마지막 입력이 맞붙은 원문 자리 (첨가면 -1)', () => {
+    expect(run('가나다', '가나').lastJ).toBe(1)
+    expect(run('가나다', '가노').lastJ).toBe(1) // 오자 자리
+    // 중복 타건은 비용이 같은 두 해석 중 역추적이 '뒤의 바 = 정답, 앞의 바 = 첨가' 를 고른다 (end 는 안 나아감)
+    expect(run('가나다라마바사', '가나다라마바바')).toMatchObject({ lastJ: 5, end: 6, ins: 1 })
+    expect(run('가나다', '가나다ㅋ').lastJ).toBe(-1) // 끝 넘어 잡음은 첨가
+    expect(run('가나다', '').lastJ).toBe(-1)
+    // 사진 사례: '앞치마' 를 '앞티라치' 로 — 마지막 '치' 가 원문 '치' 에 맞붙고 티·라는 첨가
+    const r = run('덮다 앞치마 높다', '덮다앞티라치')
+    expect(r).toMatchObject({ end: 4, ins: 2, sub: 0, lastJ: 3 })
+    expect(r.status[3]).toBe(ST_OK)
+  })
+
   it('증분 갱신 = 처음부터 계산과 같다 (백스페이스 포함)', () => {
     const t = buildTarget('소시지 자두 가지 우거지 어디서 오고')
     const al = new LiveAligner(t.norm)

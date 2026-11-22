@@ -146,6 +146,13 @@
   text-decoration-thickness: 2px;
 }
 
+/* 조합 중인 글자가 아직 맞을 수 있을 때 — 잠정 정답 (확정되면 .ok) */
+.tent {
+  color: var(--accent);
+  opacity: 0.55;
+  font-weight: 600;
+}
+
 /* 지금 칠 글자 */
 .cur {
   opacity: 1;
