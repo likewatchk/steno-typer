@@ -239,9 +239,12 @@ describe('소리자바 따라치기', () => {
     await typeAll('그자가')
     await composeTo('그자가ㄷ') // '다' 가 될 수 있다
     expect(count(s.tent)).toBe(1)
-    await composeTo('그자가담') // 받침 ㅁ 은 다음 음절로 넘어갈 수 있다
+    await composeTo('그자가닺') // 받침 ㅈ 은 다음 음절 '주' 로 넘어갈 수 있다
     expect(count(s.tent)).toBe(1)
     expect(count(s.sub)).toBe(0)
+    await composeTo('그자가담') // 다음이 '주' 라 ㅁ 은 못 넘어간다 → 이미 틀림
+    expect(count(s.tent)).toBe(0)
+    expect(count(s.sub)).toBe(1)
     await composeTo('그자가티') // 완성형인데 '다' 가 못 된다 → 오자
     expect(count(s.tent)).toBe(0)
     expect(count(s.sub)).toBe(1)
@@ -249,7 +252,20 @@ describe('소리자바 따라치기', () => {
     await composeTo('그자가ㅌ') // 홑자모가 다르면 아직 모름
     expect(count(s.sub)).toBe(0)
     expect(count(s.tent)).toBe(0)
+    // 오자 뒤 다음 음절 첫 자음을 조합 중 — 오자 빨강이 꺼지지 않고 커서는 다음 자리로
+    await typeAll('그자거')
+    expect(count(s.sub)).toBe(1)
+    await composeTo('그자거ㄷ')
+    expect(count(s.sub)).toBe(1)
+    expect(count(s.tent)).toBe(1)
+    // 탈자 뒤 — 탈자 표시가 유지되고 맞게 친 글자가 흐려지지 않는다 ('그자 다' — '가' 를 건너뜀)
+    await typeAll('그자다')
+    expect(count(s.miss)).toBe(1)
+    await composeTo('그자다ㅈ')
+    expect(count(s.miss)).toBe(1)
+    expect(count(s.tent)).toBe(1)
     // 이미 맞은 마지막 글자를 조합 중에 한 번 더 쳐도(중복 타건) 그 글자가 잠정으로 되돌아가지 않는다
+    await typeAll('그자가')
     await composeTo('그자가가')
     expect(count(s.tent)).toBe(0)
     expect(count(s.ok)).toBeGreaterThanOrEqual(3)

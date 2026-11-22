@@ -63,19 +63,19 @@ export function composeSyllable(cho: string, jung: string, jong: string): string
 
 /** 겹모음의 첫 모음 — 'ㅗ' 를 치는 중이면 아직 'ㅘ' 가 될 수 있다 */
 const VOWEL_FIRST: Record<string, string> = { ㅘ: 'ㅗ', ㅙ: 'ㅗ', ㅚ: 'ㅗ', ㅝ: 'ㅜ', ㅞ: 'ㅜ', ㅟ: 'ㅜ', ㅢ: 'ㅡ' }
-/** 겹받침의 첫 자음 */
-const JONG_FIRST: Record<string, string> = {
-  ㄳ: 'ㄱ',
-  ㄵ: 'ㄴ',
-  ㄶ: 'ㄴ',
-  ㄺ: 'ㄹ',
-  ㄻ: 'ㄹ',
-  ㄼ: 'ㄹ',
-  ㄽ: 'ㄹ',
-  ㄾ: 'ㄹ',
-  ㄿ: 'ㄹ',
-  ㅀ: 'ㄹ',
-  ㅄ: 'ㅂ',
+/** 겹받침 → [앞 자음, 뒤 자음] */
+const JONG_SPLIT: Record<string, [string, string]> = {
+  ㄳ: ['ㄱ', 'ㅅ'],
+  ㄵ: ['ㄴ', 'ㅈ'],
+  ㄶ: ['ㄴ', 'ㅎ'],
+  ㄺ: ['ㄹ', 'ㄱ'],
+  ㄻ: ['ㄹ', 'ㅁ'],
+  ㄼ: ['ㄹ', 'ㅂ'],
+  ㄽ: ['ㄹ', 'ㅅ'],
+  ㄾ: ['ㄹ', 'ㅌ'],
+  ㄿ: ['ㄹ', 'ㅍ'],
+  ㅀ: ['ㄹ', 'ㅎ'],
+  ㅄ: ['ㅂ', 'ㅅ'],
 }
 
 /**
@@ -85,11 +85,12 @@ const JONG_FIRST: Record<string, string> = {
  * 채점하면 '치마' 를 치는 동안 '침' 이 잠깐 오자로 보인다. 여기서 "아직 맞을 수 있는" 경우를 가려
  * 잠정 정답으로 보여 주기 위한 판정:
  * - 홑초성 'ㅊ' → '치'·'침' (초성이 같다)
- * - '치' → '침' (받침이 더 붙을 수 있다), '고' → '과' (겹모음)
- * - '침' → '치' (받침 ㅁ 이 다음 음절 초성으로 넘어간다), '닭' → '달' (겹받침 뒤 자음이 넘어간다)
- * - '달' → '닭' (겹받침이 더 붙는다)
+ * - '치' → '침' (받침이 더 붙을 수 있다), '고' → '과' (겹모음), '달' → '닭' (겹받침)
+ * - '침' → '치' — 받침 ㅁ 이 다음 음절 초성으로 넘어갈 때만. 그래서 원문 다음 음절 `next` 의
+ *   초성이 그 받침이어야 한다 ('치마' 면 참, '치다' 면 거짓). '닭' → '달' 도 같은 규칙(뒤 자음 ㄱ).
+ *   겹받침은 뒤 자음만 넘어가므로 '닭' 이 '다' 가 되지는 않는다.
  */
-export function canBecomeSyllable(partial: string, target: string): boolean {
+export function canBecomeSyllable(partial: string, target: string, next?: string): boolean {
   if (partial === target) return true
   const t = decomposeSyllable(target)
   if (!t) return false
@@ -97,8 +98,13 @@ export function canBecomeSyllable(partial: string, target: string): boolean {
   if (!p) return (CHOSEONG as readonly string[]).includes(partial) && partial === t[0]
   if (p[0] !== t[0]) return false
   if (p[1] !== t[1]) return p[2] === '' && VOWEL_FIRST[t[1]] === p[1]
-  if (p[2] === t[2] || p[2] === '' || t[2] === '') return true
-  return JONG_FIRST[t[2]] === p[2] || JONG_FIRST[p[2]] === t[2]
+  if (p[2] === t[2] || p[2] === '') return true
+  if (JONG_SPLIT[t[2]]?.[0] === p[2]) return true // 겹받침이 더 붙는다
+  // 받침(의 뒤 자음)이 다음 음절 초성으로 넘어간다
+  const carried = t[2] === '' ? (JONG_SPLIT[p[2]] ? null : p[2]) : JONG_SPLIT[p[2]]?.[0] === t[2] ? JONG_SPLIT[p[2]][1] : null
+  if (!carried || next === undefined) return false
+  const nx = decomposeSyllable(next)
+  return nx !== null && nx[0] === carried
 }
 
 /** 문자열 → 자모 시퀀스. 한글 음절은 초/중/종으로 펼치고 그 외 문자는 그대로. */

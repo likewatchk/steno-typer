@@ -126,6 +126,34 @@ describe('LiveAligner — 시험 기준', () => {
     expect(r.status[3]).toBe(ST_OK)
   })
 
+  it('peek — 잠정 음절은 맞을 수 있는 자리에 비용 0 으로 붙고, 저장된 행은 그대로', () => {
+    const t = buildTarget('가나다라')
+    const al = new LiveAligner(t.norm)
+    const fitsD = (j: number) => t.norm[j] === '다' // 'ㄷ' 조합 중
+    // 오자 뒤: '가너' + ㄷ — 오자 표시가 유지되고 ㄷ 은 '다' 자리로
+    const r = al.update(normalizeTyped('가너'))
+    const v = al.peek(fitsD)
+    expect(v).toMatchObject({ end: 3, lastJ: 2, sub: 1, ins: 0 })
+    expect(v.status[1]).toBe(ST_SUB)
+    expect(al.update(normalizeTyped('가너'))).toEqual(r) // peek 이 상태를 안 바꿈
+    // 탈자 뒤: '가다' + ㄹ — 탈자 표시 유지, 커서가 뒤로 안 튐
+    al.update(normalizeTyped('가다'))
+    const v2 = al.peek((j) => t.norm[j] === '라')
+    expect(v2).toMatchObject({ end: 4, lastJ: 3, miss: 1 })
+    expect(v2.status[1]).toBe(ST_MISS)
+    expect(v2.status[2]).toBe(ST_OK)
+  })
+
+  it('peek near — 홑자모는 같은 비용이면 가장 가까운 맞는 자리 (커서가 앞으로 튀지 않게)', () => {
+    // '가나다 아어' 에 '가나가' 를 쳐 오자 뒤, 'ㅇ' 조합 중: '아'(3)·'어'(4) 둘 다 맞을 수 있다
+    const t = buildTarget('가나다 아어 오')
+    const al = new LiveAligner(t.norm)
+    al.update(normalizeTyped('가나가'))
+    const fitsO = (j: number) => t.norm[j].startsWith('아') || t.norm[j] === '어' || t.norm[j] === '오'
+    expect(al.peek(fitsO, true).end).toBeLessThanOrEqual(al.peek(fitsO).end)
+    expect(al.peek(fitsO, true)).toMatchObject({ end: 4, lastJ: 3 })
+  })
+
   it('증분 갱신 = 처음부터 계산과 같다 (백스페이스 포함)', () => {
     const t = buildTarget('소시지 자두 가지 우거지 어디서 오고')
     const al = new LiveAligner(t.norm)

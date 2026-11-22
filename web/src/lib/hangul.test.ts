@@ -87,13 +87,21 @@ describe('canBecomeSyllable — 조합 중 글자가 아직 목표 음절이 될
     expect(canBecomeSyllable('ㅌ', '치')).toBe(false)
     expect(canBecomeSyllable('ㅣ', '치')).toBe(false)
   })
-  it('받침이 더 붙거나(치→침) 다음 음절로 넘어가거나(침→치) 겹모음·겹받침이 이어질 수 있다', () => {
+  it('받침이 더 붙거나(치→침) 겹모음·겹받침이 이어질 수 있다', () => {
     expect(canBecomeSyllable('치', '침')).toBe(true)
-    expect(canBecomeSyllable('침', '치')).toBe(true)
     expect(canBecomeSyllable('고', '과')).toBe(true)
     expect(canBecomeSyllable('달', '닭')).toBe(true)
-    expect(canBecomeSyllable('닭', '달')).toBe(true)
     expect(canBecomeSyllable('치', '치')).toBe(true)
+  })
+  it('받침이 다음 음절로 넘어가는 건 원문 다음 음절 초성이 그 받침일 때만', () => {
+    expect(canBecomeSyllable('침', '치', '마')).toBe(true) // 치마
+    expect(canBecomeSyllable('침', '치', '다')).toBe(false) // 치다 — 침은 이미 틀림
+    expect(canBecomeSyllable('침', '치')).toBe(false) // 원문 끝
+    expect(canBecomeSyllable('닭', '달', '가')).toBe(true) // 겹받침 뒤 자음 ㄱ 이 넘어감
+    expect(canBecomeSyllable('닭', '달', '마')).toBe(false)
+    // 겹받침은 뒤 자음만 넘어간다 — '닭'+ㅏ = '달가', '다…' 는 안 됨
+    expect(canBecomeSyllable('닭', '다', '가')).toBe(false)
+    expect(canBecomeSyllable('값', '가', '사')).toBe(false)
   })
   it('이미 틀린 완성형은 안 된다', () => {
     expect(canBecomeSyllable('티', '치')).toBe(false)

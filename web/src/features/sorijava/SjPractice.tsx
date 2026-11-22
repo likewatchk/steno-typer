@@ -13,7 +13,7 @@
  */
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useApp } from '../../app/store.ts'
-import { canBecomeSyllable, decomposeSyllable } from '../../lib/hangul.ts'
+import { canBecomeSyllable } from '../../lib/hangul.ts'
 import StenoInput, { type StenoInputHandle } from '../typing/StenoInput.tsx'
 import { BASIC_STAGES, PART_LABEL, buildSessionItems, scoreOptsFor, targetSyllablesFor, type SjItem } from './basicCourses.ts'
 import {
@@ -99,12 +99,9 @@ interface LiveView {
 }
 const EMPTY_VIEW: LiveView = { res: EMPTY, compAt: -1, compCls: null }
 
-/** 조합 중 글자 `comp` 를 원문 `target` 자리에 어떻게 보일지 */
-function composingClass(comp: string, target: string): string | null {
-  if (canBecomeSyllable(comp, target)) return s.tent
-  // 완성형(또는 한글 아님)인데 못 맞추는 글자는 바로 오자로 — 홑자모는 아직 모르니 흐릿하게
-  return decomposeSyllable(comp) || !/^[ㄱ-ㅎㅏ-ㅣ]$/u.test(comp) ? null : s.pending
-}
+/** 입력창 끝 글자가 IME 조합 대상(한글)인가 — 끝이 공백·부호면 조합 중 플래그가 남아 있어도 조합 음절이 아니다 */
+const HANGUL_END_RE = /[가-힣ㄱ-ㅎㅏ-ㅣ]$/u
+const BARE_JAMO_RE = /^[ㄱ-ㅎㅏ-ㅣ]$/u
 
 /** 부호 타법 힌트인가 — 부호를 채점하지 않는 범위(전부 섞기)에서는 숨긴다 */
 const PUNCT_HINT_RE = /띄어쓰기|마침표|쉼표|[!%-]:/
@@ -138,8 +135,6 @@ function Run({ config, onRestart }: { config: SjConfig; onRestart: () => void })
   // 세션 본문은 state 로 한 번만 만든다 (섞기 결과와 채점기의 원문이 항상 같은 것을 가리키게)
   const [sess] = useState(() => makeSession(config))
   const [aligner] = useState(() => new LiveAligner(sess.norm))
-  // 조합 중 음절까지 넣은 화면용 정렬기 — 확정 정렬기와 행을 따로 가져 타건마다 1행씩만 더 계산한다
-  const [viewAligner] = useState(() => new LiveAligner(sess.norm))
   const m = sess.norm.length
   const stage = BASIC_STAGES.find((st) => st.no === config.stage)!
 
@@ -164,7 +159,7 @@ function Run({ config, onRestart }: { config: SjConfig; onRestart: () => void })
     const raw = final ? stripDanglingJamo(h.value()) : h.value()
     const all = normalizeTyped(raw, sess.opts)
     // 조합 중인 마지막 음절은 아직 미완성 — 점수에서는 뺀다 (종료 시엔 포함)
-    const composing = !final && h.isComposing() && all.length > 0
+    const composing = !final && h.isComposing() && all.length > 0 && HANGUL_END_RE.test(raw)
     const typed = composing ? all.slice(0, -1) : all
     const t = performance.now()
     if (startedRef.current === null && raw.trim().length > 0) {
@@ -177,13 +172,19 @@ function Run({ config, onRestart }: { config: SjConfig; onRestart: () => void })
     if (!composing) {
       setView({ res: r, compAt: -1, compCls: null })
     } else {
-      // 화면은 조합 중 음절까지 — 고쳐 치는 즉시 색이 바뀌고 커서가 나아간다
-      const v = viewAligner.update(all)
+      // 화면은 조합 중 음절까지 — 고쳐 치는 즉시 색이 바뀌고 커서가 나아간다.
+      // 아직 그 음절이 될 수 있는 자리엔 비용 0 으로 맞붙인다 ('ㄷ' 이 앞 오자 칸에 겹쳐 붙지 않게)
       const comp = all[all.length - 1]
+      const norm = sess.norm
+      const fits = (j: number) => canBecomeSyllable(comp, norm[j], norm[j + 1])
+      const bare = BARE_JAMO_RE.test(comp)
+      const v = aligner.peek(fits, bare)
       // 중복 타건(이미 맞은 자리에 다시 맞붙고 커서도 안 나아감)은 그 글자를 잠정으로 되돌리지 않는다
       const dup = v.lastJ >= 0 && v.end <= r.end && r.status[v.lastJ] === ST_OK
       const compAt = dup ? -1 : v.lastJ
-      setView({ res: v, compAt, compCls: compAt >= 0 ? composingClass(comp, sess.norm[compAt]) : null })
+      // 맞을 수 있으면 잠정 정답, 홑자모인데 안 맞으면 아직 모름(흐릿), 완성형인데 안 맞으면 정렬대로 오자
+      const compCls = compAt < 0 ? null : fits(compAt) ? s.tent : bare ? s.pending : null
+      setView({ res: v, compAt, compCls })
     }
     return r
   }

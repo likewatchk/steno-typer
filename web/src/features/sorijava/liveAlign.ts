@@ -83,6 +83,10 @@ export class LiveAligner {
   private readonly m: number
   private rows: Uint16Array[] = []
   private typed: string[] = []
+  /** peek 중일 때만 — 마지막(잠정) 입력이 원문 j 자리에 맞는가 */
+  private tentFits: ((j: number) => boolean) | null = null
+  /** peek 중일 때만 — 같은 비용이면 가장 가까운 맞는 자리를 끝으로 (홑자모는 여러 칸에 맞아 커서가 앞으로 튀지 않게) */
+  private tentNear = false
 
   constructor(private readonly target: string[]) {
     this.m = target.length
@@ -119,6 +123,45 @@ export class LiveAligner {
     return this.result()
   }
 
+  /**
+   * 마지막 update 입력 뒤에 '잠정' 음절 하나(IME 조합 중)를 붙여 본 결과 — 저장된 행은 바꾸지 않는다.
+   * `fits(j)` 가 참인 원문 자리에는 비용 0 으로 맞붙는다 ('ㄷ'·'담' 이 아직 '다' 가 될 수 있으면 맞은 것으로).
+   * 그래야 조합 중 홑자모가 앞의 오자 칸에 겹쳐 붙어 빨강이 꺼지거나 커서가 뒤로 튀지 않는다.
+   * 잠정 음절 자리는 lastJ 로 알려 준다 (status 는 맞으면 OK).
+   * @param near 같은 비용의 맞는 자리 중 가장 가까운 곳을 끝으로 — 홑자모('ㅇ' 은 ㅇ 초성 모든 칸에 맞는다)용
+   */
+  peek(fits: (j: number) => boolean, near = false): AlignResult {
+    const m = this.m
+    const n = this.typed.length
+    const up = this.rows[n]
+    const row = new Uint16Array(m + 1)
+    row[0] = n + 1
+    for (let j = 1; j <= m; j++) {
+      const diag = up[j - 1] + (fits(j - 1) ? 0 : 1)
+      const ins = up[j] + 1
+      const del = row[j - 1] + 1
+      row[j] = diag < ins ? (diag < del ? diag : del) : ins < del ? ins : del
+    }
+    this.rows.push(row)
+    this.typed.push('\u0000')
+    this.tentFits = fits
+    this.tentNear = near
+    try {
+      return this.result()
+    } finally {
+      this.rows.pop()
+      this.typed.pop()
+      this.tentFits = null
+      this.tentNear = false
+    }
+  }
+
+  /** 입력 i(1부터)가 원문 j(1부터)와 맞는가 — 잠정 입력은 fits 로 */
+  private same(i: number, j: number): boolean {
+    if (this.tentFits && i === this.typed.length) return this.tentFits(j - 1)
+    return this.target[j - 1] === this.typed[i - 1]
+  }
+
   private result(): AlignResult {
     const n = this.typed.length
     const m = this.m
@@ -131,14 +174,13 @@ export class LiveAligner {
     //     오자로 보여 주되(타자 교본식), 잡음이 여러 개여도 커서가 멀리 튀지 않게 나머지는 첨가로 센다.
     let best = last[0]
     for (let j = 1; j <= m; j++) if (last[j] < best) best = last[j]
-    const lastTyped = this.typed[n - 1]
     const up = this.rows[n - 1]
     let end = -1
-    for (let j = m; j >= 1; j--) {
-      if (last[j] === best && this.target[j - 1] === lastTyped && up[j - 1] === best) {
-        end = j
-        break
-      }
+    const isEnd = (j: number) => last[j] === best && up[j - 1] === best && this.same(n, j)
+    if (this.tentNear) {
+      for (let j = 1; j <= m && end < 0; j++) if (isEnd(j)) end = j
+    } else {
+      for (let j = m; j >= 1 && end < 0; j--) if (isEnd(j)) end = j
     }
     if (end < 0) {
       let nearest = 0
@@ -153,11 +195,10 @@ export class LiveAligner {
     let miss = 0
     let ins = 0
     let lastJ = -1
-    const t = this.target
     while (i > 0 || j > 0) {
       const cur = this.rows[i][j]
       if (i > 0 && j > 0) {
-        const same = t[j - 1] === this.typed[i - 1]
+        const same = this.same(i, j)
         if (this.rows[i - 1][j - 1] + (same ? 0 : 1) === cur) {
           status[j - 1] = same ? ST_OK : ST_SUB
           if (same) ok++
