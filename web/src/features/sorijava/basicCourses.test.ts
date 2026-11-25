@@ -9,9 +9,10 @@ function allowedUpTo(table: Record<number, string>, stage: number): Set<string> 
 }
 
 describe('기본자리 코스 데이터', () => {
-  it('10단계가 모두 있고 항목이 비어 있지 않다', () => {
-    expect(BASIC_STAGES.map((s) => s.no)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-    for (const s of BASIC_STAGES) {
+  it('1~10단계 + 11단계 총정리, 기본자리 단계는 항목이 비어 있지 않다', () => {
+    expect(BASIC_STAGES.map((s) => s.no)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+    expect(BASIC_STAGES.filter((s) => s.drills).map((s) => s.no)).toEqual([11])
+    for (const s of BASIC_STAGES.filter((st) => !st.drills)) {
       expect(s.bookWords.length).toBeGreaterThan(10)
       expect(s.extra.length, `${s.no}단계 추가 낱말 3배`).toBeGreaterThanOrEqual(s.bookWords.length * 3)
       expect(s.abbr.length).toBeGreaterThan(0)
@@ -19,7 +20,7 @@ describe('기본자리 코스 데이터', () => {
     }
   })
 
-  for (const stage of BASIC_STAGES) {
+  for (const stage of BASIC_STAGES.filter((st) => !st.drills)) {
     it(`${stage.no}단계 추가 낱말은 배운 자리만 쓰고, 새 자리를 하나 이상 쓴다`, () => {
       const cho = allowedUpTo(NEW_CHO, stage.no)
       const jung = allowedUpTo(NEW_JUNG, stage.no)

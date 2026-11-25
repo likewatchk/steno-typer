@@ -420,3 +420,23 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* 11단계 약어 고르기 — 교재 단계별 한 줄 */
+.picks {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.pickRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.pickStage {
+  min-width: 4.2em;
+  font-weight: 600;
+}

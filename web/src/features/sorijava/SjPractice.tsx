@@ -15,7 +15,17 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useApp } from '../../app/store.ts'
 import { canBecomeSyllable } from '../../lib/hangul.ts'
 import StenoInput, { type StenoInputHandle } from '../typing/StenoInput.tsx'
-import { BASIC_STAGES, PART_LABEL, buildSessionItems, scoreOptsFor, targetSyllablesFor, type SjItem } from './basicCourses.ts'
+import { pickLabel } from './abbrReview.ts'
+import {
+  BASIC_STAGES,
+  PART_LABEL,
+  buildSessionItems,
+  effectivePart,
+  isReviewStage,
+  scoreOptsFor,
+  targetSyllablesFor,
+  type SjItem,
+} from './basicCourses.ts'
 import {
   LiveAligner,
   ST_MISS,
@@ -50,14 +60,16 @@ interface Session {
 }
 
 function makeSession(cfg: SjConfig): Session {
+  const part = effectivePart(cfg.stage, cfg.part)
   const items = buildSessionItems({
     stage: cfg.stage,
-    part: cfg.part,
+    part,
     cumulative: cfg.cumulative,
     shuffle: cfg.shuffle,
     targetSyllables: targetSyllablesFor(cfg.tasu, cfg.minutes),
+    pick: cfg.pick,
   })
-  const opts: ScoreOpts = scoreOptsFor(cfg.part)
+  const opts: ScoreOpts = scoreOptsFor(part)
   const text = items.map((it) => it.t).join(' ')
   const t = buildTarget(text, opts)
   const wordOfChar = new Int32Array(t.chars.length)
@@ -104,7 +116,8 @@ const HANGUL_END_RE = /[가-힣ㄱ-ㅎㅏ-ㅣ]$/u
 const BARE_JAMO_RE = /^[ㄱ-ㅎㅏ-ㅣ]$/u
 
 /** 부호 타법 힌트인가 — 부호를 채점하지 않는 범위(전부 섞기)에서는 숨긴다 */
-const PUNCT_HINT_RE = /띄어쓰기|마침표|쉼표|[!%-]:/
+// 앞에 고정 — '입니까?:'·'습니까?:' 는 부호가 아니라 약어라서 숨기지 않는다
+const PUNCT_HINT_RE = /^(띄어쓰기|마침표|쉼표|[?!%-]):/
 
 /** 종료 시 꼬리에 남은 미완성 자모(조합 중이던 것) 제거 — 버튼 클릭으로 포커스가 빠지며 확정된 홑자모는 입력이 아니다 */
 function stripDanglingJamo(raw: string): string {
@@ -274,7 +287,9 @@ function Run({ config, onRestart }: { config: SjConfig; onRestart: () => void })
     }
   }, [curChar, sess.chars.length])
 
-  const title = `${config.stage}단계 ${stage.title} · ${PART_LABEL[config.part]}${config.cumulative && config.stage > 1 ? ' · 누적' : ''}`
+  const title = isReviewStage(stage)
+    ? `${config.stage}단계 ${stage.title} · ${pickLabel(config.pick)}`
+    : `${config.stage}단계 ${stage.title} · ${PART_LABEL[config.part]}${config.cumulative && config.stage > 1 ? ' · 누적' : ''}`
   const running = startedAt !== null && ended === null
 
   return (
@@ -337,7 +352,7 @@ function Run({ config, onRestart }: { config: SjConfig; onRestart: () => void })
             <b>{res.ins}</b>
             {curItem?.h && ended === null && (sess.opts.punct || !PUNCT_HINT_RE.test(curItem.h)) && (
               <>
-                {'\u00a0\u00a0·\u00a0\u00a0'}약어 <b>{curItem.t}</b> — {curItem.h}
+                {'\u00a0\u00a0·\u00a0\u00a0'}약어 <b>{curItem.k ?? curItem.t}</b> — {curItem.h}
               </>
             )}
           </span>

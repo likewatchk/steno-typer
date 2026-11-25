@@ -1,12 +1,17 @@
 /**
- * 소리자바 연습 가이드 — 기본자리연습 1~10단계.
+ * 소리자바 연습 가이드 — 기본자리연습 1~11단계 (11단계 = 기본약어 총정리).
  * 단계 고르기 → 범위·누적·섞기·타수·분량 설정 → 따라치기(SjPractice).
+ * 11단계는 범위·누적 대신 약어 고르기 (전체 · 교재 단계 묶음 · 약어 하나).
  */
 import { useState } from 'react'
 import { useApp } from '../../app/store.ts'
+import { ABBR_DRILLS, DRILL_GROUPS, PICK_ALL, drillsFor, pickKeys, pickOfStage } from './abbrReview.ts'
 import {
   BASIC_STAGES,
   PART_LABEL,
+  buildSessionItems,
+  effectivePart,
+  isReviewStage,
   scoreOptsFor,
   stageItems,
   syllableCount,
@@ -31,7 +36,7 @@ const RIGHT = [
 const THUMB_L = ['ㅗ', 'ㅏ', 'ㅜ']
 const THUMB_R = ['ㅡ', 'ㅓ', 'ㅣ']
 
-function SjKeyboard({ keys }: { keys: KeyRef[] }) {
+function SjKeyboard({ keys, caption }: { keys: KeyRef[]; caption: string }) {
   const on = new Set(keys.map((k) => `${k.side}:${k.key}`))
   const key = (side: KeyRef['side'], k: string) => (
     <span key={`${side}${k}`} className={`${s.key} ${on.has(`${side}:${k}`) ? s.keyOn : ''}`}>
@@ -65,7 +70,7 @@ function SjKeyboard({ keys }: { keys: KeyRef[] }) {
         {THUMB_R.map((k) => key('T', k))}
         <span className={s.handLabel}>오른엄지</span>
       </div>
-      <figcaption className={s.caption}>강조된 글쇠가 이 단계에서 새로 익히는 자리입니다</figcaption>
+      <figcaption className={s.caption}>{caption}</figcaption>
     </figure>
   )
 }
@@ -100,17 +105,27 @@ export default function SoriJava() {
     patch({ tasu: clampTasu(n) })
   }
 
-  const ownCount = stageItems(stage, cfg.part).length
+  const review = isReviewStage(stage)
+  const part = effectivePart(cfg.stage, cfg.part)
+  const own = stageItems(stage, part, cfg.pick)
+  const ownCount = own.length
   const prevCount =
-    cfg.cumulative && cfg.stage > 1
-      ? BASIC_STAGES.filter((st) => st.no < cfg.stage).reduce((n, st) => n + stageItems(st, cfg.part).length, 0)
+    cfg.cumulative && cfg.stage > 1 && !review
+      ? BASIC_STAGES.filter((st) => st.no < cfg.stage).reduce((n, st) => n + stageItems(st, part).length, 0)
       : 0
-  const scoreOpts = scoreOptsFor(cfg.part)
-  const ownSyl = stageItems(stage, cfg.part).reduce((n, it) => n + syllableCount(it.t, scoreOpts), 0)
+  const scoreOpts = scoreOptsFor(part)
+  const ownSyl = own.reduce((n, it) => n + syllableCount(it.t, scoreOpts), 0)
+  const picked = drillsFor(cfg.pick)
   const avgSyl = ownSyl / Math.max(1, ownCount)
   const target = targetSyllablesFor(cfg.tasu, cfg.minutes)
-  // 전부: 현재 단계 전부 + (누적이면) 앞 단계에서 같은 수만큼 → 대략 두 배
-  const volume = target === 'all' ? Math.round(ownSyl * (prevCount > 0 ? 2 : 1)) : target
+  // 전부: 현재 단계 전부 + (누적이면) 앞 단계에서 같은 수만큼 → 대략 두 배.
+  // 총정리 분 단위: 단계마다 최소 1문장이라 목표보다 늘 수 있다 — 실제로 만들어 센다 (섞지 않고 — 렌더마다 숫자가 흔들리지 않게)
+  const volume =
+    target === 'all'
+      ? Math.round(ownSyl * (prevCount > 0 ? 2 : 1))
+      : review
+        ? buildSessionItems({ ...cfg, part, shuffle: false, targetSyllables: target }).reduce((n, it) => n + syllableCount(it.t, scoreOpts), 0)
+        : target
   const estMin = volume / cfg.tasu
 
   function start() {
@@ -122,14 +137,23 @@ export default function SoriJava() {
     <div className={s.page}>
       <section className={s.hero}>
         <span className={s.eyebrow}>소리자바 속기</span>
-        <h1 className={s.title}>기본자리연습 1~10단계</h1>
+        <h1 className={s.title}>기본자리연습 1~11단계</h1>
         <p className={s.lead}>
           교재 순서대로 자리를 익힙니다. 위에 이어지는 글을 아래에 따라 치면, 맞게 친 글자가 색으로 칠해지고 속기
           시험 기준으로 바로 채점됩니다. 목표 타수(분당 음절)로 속도를 정하세요.
         </p>
       </section>
 
-      <SjKeyboard keys={stage.keys} />
+      <SjKeyboard
+        keys={review ? pickKeys(cfg.pick) : stage.keys}
+        caption={
+          review
+            ? picked.length === 1
+              ? `강조된 글쇠가 '${picked[0].label}' 약어 타법입니다 (${picked[0].stage}단계)`
+              : '약어를 하나 고르면 그 타법 글쇠가 강조됩니다'
+            : '강조된 글쇠가 이 단계에서 새로 익히는 자리입니다'
+        }
+      />
 
       <div className={s.grid}>
         <section aria-label="연습 단계">
@@ -147,7 +171,9 @@ export default function SoriJava() {
                     <span className={s.stepTitle}>{st.title}</span>
                     <span className={s.stepDesc}>{st.focus}</span>
                   </span>
-                  <span className={`${s.stepCount} num`}>{st.bookWords.length + st.extra.length}낱말</span>
+                  <span className={`${s.stepCount} num`}>
+                    {st.drills ? `${st.drills.reduce((n, d) => n + d.sentences.length, 0)}문장` : `${st.bookWords.length + st.extra.length}낱말`}
+                  </span>
                 </button>
               </li>
             ))}
@@ -166,31 +192,74 @@ export default function SoriJava() {
             ))}
           </ul>
 
-          <div className={s.group}>
-            <span className={s.label}>연습 범위</span>
-            <div className={s.seg} role="group" aria-label="연습 범위">
-              {PARTS.map((p) => (
-                <button key={p} className={cfg.part === p ? s.segOn : ''} onClick={() => patch({ part: p })}>
-                  {PART_LABEL[p]}
+          {review ? (
+            <div className={s.group}>
+              <span className={s.label}>약어 고르기</span>
+              <div className={s.picks} role="group" aria-label="약어 고르기">
+                <button
+                  className={`${s.chip} ${cfg.pick === PICK_ALL ? s.chipOn : ''}`}
+                  aria-pressed={cfg.pick === PICK_ALL}
+                  onClick={() => patch({ pick: PICK_ALL })}
+                >
+                  전체 · 1→10단계 차례로 ({ABBR_DRILLS.length}개)
                 </button>
-              ))}
+                {DRILL_GROUPS.map((g) => (
+                  <div key={g.stage} className={s.pickRow}>
+                    <button
+                      className={`${s.chip} ${s.pickStage} ${cfg.pick === pickOfStage(g.stage) ? s.chipOn : ''}`}
+                      aria-pressed={cfg.pick === pickOfStage(g.stage)}
+                      onClick={() => patch({ pick: pickOfStage(g.stage) })}
+                    >
+                      {g.stage}단계
+                    </button>
+                    {g.drills.map((d) => (
+                      <button
+                        key={d.id}
+                        className={`${s.chip} ${cfg.pick === d.id ? s.chipOn : ''}`}
+                        aria-pressed={cfg.pick === d.id}
+                        title={d.h}
+                        onClick={() => patch({ pick: d.id })}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <span className={s.dim}>
+                {picked.length === 1
+                  ? `${picked[0].label} — ${picked[0].h} · 문장 ${picked[0].sentences.length}개`
+                  : `약어 ${picked.length}개 · 문장 ${ownCount}개`}
+                {' · '}N단계 약어 문장은 N단계까지 배운 자리만 씁니다 · 부호도 채점
+              </span>
             </div>
-          </div>
+          ) : (
+            <div className={s.group}>
+              <span className={s.label}>연습 범위</span>
+              <div className={s.seg} role="group" aria-label="연습 범위">
+                {PARTS.map((p) => (
+                  <button key={p} className={cfg.part === p ? s.segOn : ''} onClick={() => patch({ part: p })}>
+                    {PART_LABEL[p]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-          {cfg.part === 'abbr' && <span className={s.dim}>약어 연습에서는 마침표·쉼표 같은 부호도 채점합니다.</span>}
+          {!review && cfg.part === 'abbr' && <span className={s.dim}>약어 연습에서는 마침표·쉼표 같은 부호도 채점합니다.</span>}
           <div className={s.toggles}>
             <label className={s.check}>
               <input type="checkbox" checked={cfg.shuffle} onChange={(e) => patch({ shuffle: e.target.checked })} />
-              섞기
+              {review ? '섞기 (단계 안에서만 — 순서는 1→10단계)' : '섞기'}
             </label>
             <label className={s.check}>
               <input
                 type="checkbox"
-                checked={cfg.cumulative && cfg.stage > 1}
-                disabled={cfg.stage === 1}
+                checked={cfg.cumulative && cfg.stage > 1 && !review}
+                disabled={cfg.stage === 1 || review}
                 onChange={(e) => patch({ cumulative: e.target.checked })}
               />
-              누적 (앞 단계도 섞어서)
+              {review ? '누적 (총정리는 이미 1~10단계 전부)' : '누적 (앞 단계도 섞어서)'}
             </label>
           </div>
 

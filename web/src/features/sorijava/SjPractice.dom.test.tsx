@@ -8,6 +8,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from '../../app/App.tsx'
 import { useApp } from '../../app/store.ts'
+import { ABBR_DRILLS } from './abbrReview.ts'
 import { BASIC_STAGES, buildSessionItems } from './basicCourses.ts'
 import type { SjConfig } from './sjPrefs.ts'
 import s from './SjPractice.module.css'
@@ -23,6 +24,7 @@ const CFG: SjConfig = {
   tasu: 30,
   minutes: 1,
   reveal: 'all',
+  pick: 'all',
 }
 
 beforeEach(async () => {
@@ -293,12 +295,43 @@ describe('소리자바 따라치기', () => {
   })
 })
 
+describe('11단계 기본약어 총정리', () => {
+  it('약어 문장 — 부호까지 채점, 힌트에 약어·배운 단계가 보인다', async () => {
+    await open({ ...CFG, stage: 11, part: 'words', pick: 'seumnikka', shuffle: false })
+    const first = ABBR_DRILLS.find((d) => d.id === 'seumnikka')!.sentences[0]
+    expect(container.querySelector('[data-testid="sj-target"]')!.textContent!.startsWith(first)).toBe(true)
+    expect(text()).toContain('기본약어 총정리 · 습니까?')
+    await typeAll('점')
+    expect(text()).toContain('약어 습니까? — 10단계 · 종성 ㅅㅊ')
+    // 물음표 빠뜨리면 탈자 (부호 채점)
+    await typeAll(first.replace('?', '') + ' 숙')
+    expect(count(s.miss)).toBe(1)
+  })
+
+  it('가이드 — 11단계를 고르면 범위 대신 약어 고르기, 고른 약어 글쇠 강조', async () => {
+    await act(async () => {
+      root.render(<App />)
+    })
+    const step11 = [...container.querySelectorAll('button')].find((b) => b.textContent?.includes('기본약어 총정리'))!
+    act(() => step11.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(container.querySelector('[aria-label="연습 범위"]')).toBeNull()
+    expect(container.querySelector('[aria-label="약어 고르기"]')).toBeTruthy()
+    const chip = [...container.querySelectorAll('[aria-label="약어 고르기"] button')].find((b) => b.textContent === '와(과)')!
+    act(() => chip.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(text()).toContain("'와(과)' 약어 타법입니다 (8단계)")
+    const startBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === '11단계 연습 시작')!
+    act(() => startBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    const sc = useApp.getState().screen
+    expect(sc.name === 'sjPractice' && sc.config.stage === 11 && sc.config.pick === 'wa').toBe(true)
+  })
+})
+
 describe('소리자바 가이드', () => {
   it('단계 선택 → 시작하면 따라치기 화면', async () => {
     await act(async () => {
       root.render(<App />)
     })
-    expect(text()).toContain('기본자리연습 1~10단계')
+    expect(text()).toContain('기본자리연습 1~11단계')
     const step3 = [...container.querySelectorAll('button')].find((b) => b.textContent?.includes('아랫줄 초성'))!
     act(() => step3.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     const startBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === '3단계 연습 시작')!

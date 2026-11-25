@@ -1,7 +1,8 @@
 /**
- * 소리자바 기본자리연습 1~10단계 코스 데이터.
+ * 소리자바 기본자리연습 1~11단계 코스 데이터.
  *
- * 출처: 소리자바 기본자리 교재 1~10단계 (p38~111).
+ * 출처: 소리자바 기본자리 교재 1~10단계 (p38~111). 11단계는 교재 p109~110 '기본약어 총정리' 표의
+ * 약어마다 문장 10개 (abbrReview.ts).
  * - book*  : 교재에 실린 기본자리·약어·문장 연습 그대로
  * - extra  : 단계 취지에 맞춰 추가한 낱말 — 그 단계까지 배운 자리만으로 칠 수 있고,
  *            그 단계에서 새로 배운 자리를 최소 하나 쓴다 (basicCourses.test.ts 가 검증)
@@ -13,6 +14,10 @@ export interface SjItem {
   t: string
   /** 약어 타법 힌트 (표시 전용) */
   h?: string
+  /** 힌트에 보일 약어 이름 — 없으면 t (약어 낱말 자체). 총정리 문장은 문장이 길어 약어만 */
+  k?: string
+  /** 총정리: 이 약어를 배운 교재 단계 — 본문을 단계 순서로 늘어놓는 기준 */
+  g?: number
 }
 
 export interface KeyRef {
@@ -38,6 +43,8 @@ export interface BasicStage {
   abbr: SjItem[]
   /** 교재 문장 연습 */
   sentences: string[]
+  /** 총정리 단계 — 약어별 문장 묶음. 있으면 범위(낱말·약어·문장)·누적 대신 약어 고르기 */
+  drills?: AbbrDrill[]
 }
 
 // ---- 자리 허용 집합 (누적) — 추가 낱말 검증 + 키보드 강조의 근거 ----
@@ -60,11 +67,18 @@ export const NEW_JONG: Record<number, string> = {
   10: 'ㄳㄵㄶㄺㄻㄼㄽㄾㄿㅀㅄ',
 }
 
+import { ABBR_DRILLS, PICK_ALL, drillsFor, type AbbrDrill, type AbbrPick } from './abbrReview.ts'
 import { EXTRA_WORDS } from './basicExtra.ts'
 import { isScored, type ScoreOpts } from './liveAlign.ts'
 
 const split = (s: string) => s.split(/\s+/).filter(Boolean)
 const abbr = (words: string, h: string): SjItem[] => split(words).map((t) => ({ t, h }))
+/** 약어 힌트 — 11단계 총정리(abbrReview.ts)와 같은 문구를 쓴다 */
+function H(id: string): string {
+  const d = ABBR_DRILLS.find((x) => x.id === id)
+  if (!d) throw new Error(`unknown abbr ${id}`)
+  return `${d.label}: ${d.h}`
+}
 
 export const BASIC_STAGES: BasicStage[] = [
   {
@@ -85,9 +99,9 @@ export const BASIC_STAGES: BasicStage[] = [
       자자 저저 조조 즈즈 지지 주주 다다 더더 도도 드드 디디 두두 사사 서서 소소 시시 스스 수수`),
     extra: EXTRA_WORDS[1],
     abbr: [
-      ...abbr('가 자 다 사 고 저 더', '띄어쓰기: 종성 ㄴㄹ'),
-      ...abbr('가. 자. 다. 소. 어. 아. 오.', '마침표: 종성 ㅇㅁ'),
-      ...abbr('가, 자, 다, 사, 고, 도, 지,', '쉼표: 종성 ㅎㅌㅊ'),
+      ...abbr('가 자 다 사 고 저 더', H('space')),
+      ...abbr('가. 자. 다. 소. 어. 아. 오.', H('period')),
+      ...abbr('가, 자, 다, 사, 고, 도, 지,', H('comma')),
     ],
     sentences: [
       '그자가 다 주고 가다.',
@@ -121,9 +135,9 @@ export const BASIC_STAGES: BasicStage[] = [
       진갑 갑다 조잡 잡다 전답 답다`),
     extra: EXTRA_WORDS[2],
     abbr: [
-      ...abbr('시간이 산이 달이 운이 적이', '이: ㉿ + ㅣ'),
-      ...abbr('가다. 오다. 시다. 자다. 지다.', '다.: 종성 ㅂ'),
-      ...abbr('가고 오고 사고 살고 알고', '고: 종성 ㄱ'),
+      ...abbr('시간이 산이 달이 운이 적이', H('i')),
+      ...abbr('가다. 오다. 시다. 자다. 지다.', H('da')),
+      ...abbr('가고 오고 사고 살고 알고', H('go')),
     ],
     sentences: [
       '작은 옥수수알을 사 온다.',
@@ -152,9 +166,9 @@ export const BASIC_STAGES: BasicStage[] = [
       각자 학자 작사 낙서 산고 만두`),
     extra: EXTRA_WORDS[3],
     abbr: [
-      ...abbr('그가 오기가 하기가 우리가 자기가', '가: 종성 ㄱㄲ 사이'),
-      ...abbr('가지 하지 할지 말지 갈지', '지: 종성 ㅈ'),
-      ...abbr('나의 너의 우리의 나라의 그의', '의: ㉿ + ㅢ'),
+      ...abbr('그가 오기가 하기가 우리가 자기가', H('ga')),
+      ...abbr('가지 하지 할지 말지 갈지', H('ji')),
+      ...abbr('나의 너의 우리의 나라의 그의', H('ui')),
     ],
     sentences: [
       '누군가 너의 말을 한다.',
@@ -184,10 +198,10 @@ export const BASIC_STAGES: BasicStage[] = [
       짖짖 샀샀 덤덤 공갈 공감 농담 궁중 중앙 당장 항상 할증 증설 설문 문답 답장 장롱`),
     extra: EXTRA_WORDS[4],
     abbr: [
-      ...abbr('가는 하는 자는 우는 나는', '는: 종성 ㄴ'),
-      ...abbr('강은 산은 달은 상은 좋은', '은: 종성 ㅇㄴ'),
-      ...abbr('나로서 선수로서 의사로서 속기사로서', '로서: 종성 ㄹㅅ'),
-      ...abbr('이로써 그로써 사물로써 기술로써', '로써: 종성 ㄹㅆ'),
+      ...abbr('가는 하는 자는 우는 나는', H('neun')),
+      ...abbr('강은 산은 달은 상은 좋은', H('eun')),
+      ...abbr('나로서 선수로서 의사로서 속기사로서', H('roseo')),
+      ...abbr('이로써 그로써 사물로써 기술로써', H('rosseo')),
     ],
     sentences: [
       '그는 낭만적인 사람이었다.',
@@ -216,9 +230,9 @@ export const BASIC_STAGES: BasicStage[] = [
       파리 리본 틀니 니트 보통 고통 사탕 바탕 쿵후 후추 충분 분칠 통일 일반 림프 프로 펑크 크림`),
     extra: EXTRA_WORDS[5],
     abbr: [
-      ...abbr('아기를 차를 누를 공을 산을', '를·을: 종성 ㄹ'),
-      ...abbr('하므로 되므로 강으로 산으로 손으로', '므로·으로: 종성 ㅇㄹ'),
-      ...abbr('기차로 속도로 서로 스스로 버스로', '로: 초성 ㄹ'),
+      ...abbr('아기를 차를 누를 공을 산을', H('reul')),
+      ...abbr('하므로 되므로 강으로 산으로 손으로', H('meuro')),
+      ...abbr('기차로 속도로 서로 스스로 버스로', H('ro')),
       ...abbr('방석을 갔었을 바로바로 정통으로 홀로', '을·로·으로'),
     ],
     sentences: [
@@ -247,11 +261,11 @@ export const BASIC_STAGES: BasicStage[] = [
       밑밑 붙붙 낯낯 몇몇 빛빛 덮덮 갚갚 덫덫 덧덧 낚시 콩팥 맡기 넣지`),
     extra: EXTRA_WORDS[6],
     abbr: [
-      ...abbr('나도 너도 그것도 우리도 국가도 의사도', '도: 종성 ㄷ'),
-      ...abbr('것입니다. 바입니다. 사고입니다. 국민입니다.', '입니다.: ㅣ + 종성 ㅂㅈ'),
-      ...abbr('것입니까? 보입니까? 당선입니까? 밖입니까?', '입니까?: ㅣ + 종성 ㅂㅍ'),
-      ...abbr('착한 복잡한 밋밋한 우울한 사랑한', '한: 종성 ㅎㄴ'),
-      ...abbr('말할 답답할 초조할 창창할 각오할', '할: 종성 ㅎㄹ'),
+      ...abbr('나도 너도 그것도 우리도 국가도 의사도', H('do')),
+      ...abbr('것입니다. 바입니다. 사고입니다. 국민입니다.', H('imnida')),
+      ...abbr('것입니까? 보입니까? 당선입니까? 밖입니까?', H('imnikka')),
+      ...abbr('착한 복잡한 밋밋한 우울한 사랑한', H('han')),
+      ...abbr('말할 답답할 초조할 창창할 각오할', H('hal')),
     ],
     sentences: [
       '비슷한 점수를 높이는 공부법입니다.',
@@ -279,10 +293,10 @@ export const BASIC_STAGES: BasicStage[] = [
       반짝 짝꿍 글씨 씨앗 이빨 빨리 진짜 껑충 쌍쌍 떵떵 깔창 빨판`),
     extra: EXTRA_WORDS[7],
     abbr: [
-      ...abbr('가서 어서 사서 자서 차서', '서: 종성 ㅅ'),
-      ...abbr('벌써 힘써', '써: 종성 ㅆ'),
-      ...abbr('함으로써 그럼으로써 콩으로써 살찜으로써', '으로써: 종성 ㅇㄹㅆ'),
-      ...abbr('가정으로서 사람으로서 자식으로서 시민으로서', '으로서: 종성 ㅇㄹㅅ'),
+      ...abbr('가서 어서 사서 자서 차서', H('seo')),
+      ...abbr('벌써 힘써', H('sseo')),
+      ...abbr('함으로써 그럼으로써 콩으로써 살찜으로써', H('eurosseo')),
+      ...abbr('가정으로서 사람으로서 자식으로서 시민으로서', H('euroseo')),
     ],
     sentences: [
       '똑같이 따라서 움직인다.',
@@ -310,8 +324,8 @@ export const BASIC_STAGES: BasicStage[] = [
       승패 패자 소재 재산 논쟁 쟁기 어제 제일 공책 책상 불행 행복 예제 실례 합계`),
     extra: EXTRA_WORDS[8],
     abbr: [
-      ...abbr('운과 산과 너와 나와 우리와', '와·과: ㉿ + ㅗㅏ'),
-      ...abbr('산에 강에 들에 일에 하늘에', '에: ㉿ + ㅓㅣ'),
+      ...abbr('운과 산과 너와 나와 우리와', H('wa')),
+      ...abbr('산에 강에 들에 일에 하늘에', H('e')),
     ],
     sentences: [
       '말과 행동에 워낙 꼼꼼한 예의범절',
@@ -339,9 +353,9 @@ export const BASIC_STAGES: BasicStage[] = [
       실현 현실 봉변 여야 야구 얘기 걔네 쟤들 섀도`),
     extra: EXTRA_WORDS[9],
     abbr: [
-      ...abbr('가며 사며 오며 하며', '며: 종성 ㅁ'),
-      ...abbr('이기면 자라면 우기면 참으면', '면: 종성 ㅁㄴ'),
-      ...abbr('가면서 하면서 주면서 그러면서', '면서: 종성 ㅁㅅ'),
+      ...abbr('가며 사며 오며 하며', H('myeo')),
+      ...abbr('이기면 자라면 우기면 참으면', H('myeon')),
+      ...abbr('가면서 하면서 주면서 그러면서', H('myeonseo')),
     ],
     sentences: [
       '교묘한 변화를 주면서 세상을 쥐락펴락',
@@ -371,12 +385,13 @@ export const BASIC_STAGES: BasicStage[] = [
       맑아 밝아 읽어 싫지 넓어 핥다 읊다 값은 삶의 삯은 잃다`),
     extra: EXTRA_WORDS[10],
     abbr: [
-      ...abbr('내게 가게 오게 놀라게 모르게', '게: 종성 ㄱㅆ'),
-      ...abbr('샀습니다. 있습니다. 했습니다. 갔습니다. 없었습니다.', '습니다.: 종성 ㅅㄷ'),
-      ...abbr('없습니까? 맞습니까? 덥습니까? 알겠습니까? 가잖습니까?', '습니까?: 종성 ㅅㅊ'),
-      ...abbr('그렇다! 미인이다! 기억해! 운명이다!', '!: 초성 ㄱㅈㄷ'),
-      ...abbr('가-나 서울-부산', '-: 종성 ㅍㅂ'),
-      ...abbr('25% 0.73% 90% 100%-40%', '%: 초성 ㅂㅋㅌ · 숫자 1~5 초성 / 6~0 종성'),
+      ...abbr('내게 가게 오게 놀라게 모르게', H('ge')),
+      ...abbr('샀습니다. 있습니다. 했습니다. 갔습니다. 없었습니다.', H('seumnida')),
+      ...abbr('없습니까? 맞습니까? 덥습니까? 알겠습니까? 가잖습니까?', H('seumnikka')),
+      ...abbr('왜? 어디? 누구? 언제? 정말?', H('question')),
+      ...abbr('그렇다! 미인이다! 기억해! 운명이다!', H('exclaim')),
+      ...abbr('가-나 서울-부산', H('hyphen')),
+      ...abbr('25% 0.73% 90% 100%-40%', H('percent')),
     ],
     sentences: [
       '많은 사람에게 약속하지 않았습니까?',
@@ -400,7 +415,34 @@ export const BASIC_STAGES: BasicStage[] = [
       '이 세상에 악이 없다면 선도 없을 것이다.',
     ],
   },
+  {
+    no: 11,
+    title: '기본약어 총정리',
+    focus: `1~10단계 기본약어 ${ABBR_DRILLS.length}개(교재 표 + 로) · 약어마다 문장 10개`,
+    keys: [],
+    tips: [
+      '⇦ = 앞 글자에 자동으로 붙여 쓰기 · * = 뒤에 자동 띄어쓰기 — 약어 뒤에 따로 띄어 치지 않는다',
+      '㉿ 약어(이·의·와·에)는 왼검지 ㉿ + 모음을 함께 누른다',
+      '를(을)·와(과)·므로(으로)는 타법 하나 — 앞 글자 받침에 따라 알맞은 꼴로 나온다',
+      '약어 하나를 골라 10문장을 집중하거나, 단계 묶음·전체로 섞어 친다',
+    ],
+    bookWords: [],
+    extra: [],
+    abbr: [],
+    sentences: [],
+    drills: ABBR_DRILLS,
+  },
 ]
+
+/** 총정리 단계인가 — 범위 고르기·누적이 없다 */
+export function isReviewStage(stage: BasicStage | undefined): boolean {
+  return !!stage?.drills
+}
+
+/** 실제로 쓰는 범위 — 총정리 단계는 늘 약어(부호까지 채점) */
+export function effectivePart(stageNo: number, part: CoursePart): CoursePart {
+  return isReviewStage(BASIC_STAGES.find((s) => s.no === stageNo)) ? 'abbr' : part
+}
 
 export type CoursePart = 'words' | 'abbr' | 'sentences' | 'mix'
 
@@ -411,8 +453,14 @@ export const PART_LABEL: Record<CoursePart, string> = {
   mix: '전부 섞기',
 }
 
-/** 한 단계의 연습 항목 — part 별 */
-export function stageItems(stage: BasicStage, part: CoursePart): SjItem[] {
+/** 총정리 문장 항목 — 힌트에 배운 단계를 붙여 '몇 단계 복습 중' 인지 보이게 */
+function drillItems(d: AbbrDrill): SjItem[] {
+  return d.sentences.map((t) => ({ t, h: `${d.stage}단계 · ${d.h}`, k: d.label, g: d.stage }))
+}
+
+/** 한 단계의 연습 항목 — part 별. 총정리 단계는 고른 약어(pick)의 문장 */
+export function stageItems(stage: BasicStage, part: CoursePart, pick: AbbrPick = PICK_ALL): SjItem[] {
+  if (stage.drills) return drillsFor(pick).flatMap(drillItems)
   const words = [...stage.bookWords, ...stage.extra].map((t) => ({ t }))
   const sents = stage.sentences.map((t) => ({ t }))
   switch (part) {
@@ -444,6 +492,8 @@ export interface BuildOptions {
   shuffle: boolean
   /** 목표 분량 (채점 단위 수) — 모자라면 다시 섞어 이어 붙인다. 'all' = 범위의 항목을 한 번씩 전부 */
   targetSyllables: number | 'all'
+  /** 총정리 단계의 약어 고르기 */
+  pick?: AbbrPick
   rand?: () => number
 }
 
@@ -482,11 +532,16 @@ export function buildSessionItems(o: BuildOptions): SjItem[] {
   const rand = o.rand ?? Math.random
   const cur = BASIC_STAGES.find((s) => s.no === o.stage)
   if (!cur) return []
-  const own = stageItems(cur, o.part)
+  const part = effectivePart(o.stage, o.part)
+  const own = stageItems(cur, part, o.pick)
   if (own.length === 0) return []
+  // 총정리는 그 자체가 1~10단계 전부 — 누적 없음
   const prev =
-    o.cumulative && o.stage > 1 ? BASIC_STAGES.filter((s) => s.no < o.stage).flatMap((s) => stageItems(s, o.part)) : []
-  const opts = scoreOptsFor(o.part)
+    o.cumulative && o.stage > 1 && !cur.drills
+      ? BASIC_STAGES.filter((s) => s.no < o.stage).flatMap((s) => stageItems(s, part))
+      : []
+  const opts = scoreOptsFor(part)
+  if (cur.drills) return buildReview(own, o, opts, rand)
   // 전부 = 한 바퀴 (현재 단계 전부 + 누적이면 앞 단계에서 같은 수만큼)
   if (o.targetSyllables === 'all') {
     const pool = prev.length > 0 ? [...own, ...shuffle(prev, rand).slice(0, own.length)] : own
@@ -501,6 +556,81 @@ export function buildSessionItems(o: BuildOptions): SjItem[] {
     if (prev.length > 0) pool = [...own, ...shuffle(prev, rand).slice(0, own.length)]
     const seq = o.shuffle ? shuffle(pool, rand) : pool
     for (const it of seq) {
+      out.push(it)
+      total += syllableCount(it.t, opts)
+      if (total >= target || out.length >= MAX_ITEMS) break
+    }
+  }
+  return out
+}
+
+/** 묶음 안 약어(k)별로 돌아가며 n개 — 섞기면 약어 순서·문장 순서도 섞는다 */
+function roundRobin(group: SjItem[], n: number, rand: (() => number) | null): SjItem[] {
+  const byK = new Map<string, SjItem[]>()
+  for (const it of group) {
+    const k = it.k ?? ''
+    if (!byK.has(k)) byK.set(k, [])
+    byK.get(k)!.push(it)
+  }
+  let lanes = [...byK.values()]
+  if (rand) lanes = shuffle(lanes, rand).map((l) => shuffle(l, rand))
+  const out: SjItem[] = []
+  for (let i = 0; out.length < n; i++) {
+    let any = false
+    for (const lane of lanes) {
+      if (i < lane.length) {
+        any = true
+        out.push(lane[i])
+        if (out.length >= n) break
+      }
+    }
+    if (!any) break
+  }
+  return out
+}
+
+/** 단계 묶음으로 나누기 (g 순서 유지) */
+function byGroup(items: SjItem[]): SjItem[][] {
+  const map = new Map<number, SjItem[]>()
+  for (const it of items) {
+    const g = it.g ?? 0
+    if (!map.has(g)) map.set(g, [])
+    map.get(g)!.push(it)
+  }
+  return [...map.keys()].sort((a, b) => a - b).map((g) => map.get(g)!)
+}
+
+/**
+ * 총정리 본문 — 1단계 약어 → 10단계 약어 차례로 복습. 섞기는 단계 묶음 안에서만.
+ * 분량이 한 바퀴보다 적으면 각 묶음에서 같은 비율로 덜어 내 끝 단계까지 고루 닿게 하고,
+ * 많으면 한 바퀴를 (매번 새로 섞어) 이어 붙인다.
+ */
+function buildReview(own: SjItem[], o: BuildOptions, opts: ScoreOpts, rand: () => number): SjItem[] {
+  const groups = byGroup(own)
+  const round = () => groups.flatMap((g) => (o.shuffle ? shuffle(g, rand) : g.slice()))
+  if (o.targetSyllables === 'all') return round()
+  const target = Number.isNaN(o.targetSyllables) ? 1 : Math.max(1, o.targetSyllables)
+  const roundSyl = own.reduce((n, it) => n + syllableCount(it.t, opts), 0)
+  if (target < roundSyl) {
+    // 묶음마다 같은 비율(최소 1문장)로 덜어 내되, 묶음 안 약어들을 돌아가며 뽑아 약어가 고루 나오게
+    const ratio = target / roundSyl
+    // 묶음별 뽑는 순서(약어 돌아가며)를 먼저 정하고 앞에서부터 quota 만큼 — 모자라면 묶음마다 하나씩 더
+    const orders = groups.map((g) => roundRobin(g, g.length, o.shuffle ? rand : null))
+    const quotas = groups.map((g) => Math.max(1, Math.ceil(g.length * ratio)))
+    const sylOf = (q: number[]) =>
+      orders.reduce((n, ord, i) => n + ord.slice(0, q[i]).reduce((m, it) => m + syllableCount(it.t, opts), 0), 0)
+    while (sylOf(quotas) < target && quotas.some((q, i) => q < orders[i].length)) {
+      quotas.forEach((q, i) => (quotas[i] = Math.min(orders[i].length, q + 1)))
+    }
+    return orders.flatMap((ord, i) => {
+      const picked = ord.slice(0, quotas[i])
+      return o.shuffle ? shuffle(picked, rand) : picked
+    })
+  }
+  const out: SjItem[] = []
+  let total = 0
+  while (total < target && out.length < MAX_ITEMS) {
+    for (const it of round()) {
       out.push(it)
       total += syllableCount(it.t, opts)
       if (total >= target || out.length >= MAX_ITEMS) break

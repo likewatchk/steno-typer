@@ -1,5 +1,6 @@
 /** 소리자바 기본자리 연습 설정 — 기기별 로컬 기억 */
-import type { CoursePart, Minutes } from './basicCourses.ts'
+import { PICK_ALL, isValidPick, type AbbrPick } from './abbrReview.ts'
+import { BASIC_STAGES, type CoursePart, type Minutes } from './basicCourses.ts'
 
 export interface SjConfig {
   stage: number
@@ -14,6 +15,8 @@ export interface SjConfig {
   minutes: Minutes
   /** flow = 타수 속도로 글이 나타남 / all = 처음부터 전부 보임 */
   reveal: 'flow' | 'all'
+  /** 총정리(11단계) 약어 고르기 — 'all' · 's{n}'(교재 n단계 묶음) · 약어 id */
+  pick: AbbrPick
 }
 
 export const TASU_MIN = 10
@@ -27,6 +30,7 @@ export const DEFAULT_SJ: SjConfig = {
   tasu: 100,
   minutes: 'all',
   reveal: 'flow',
+  pick: PICK_ALL,
 }
 
 const KEY = 'steno-sj-prefs'
@@ -47,13 +51,14 @@ export function sanitizeSj(raw: unknown): SjConfig {
   const stage = num(v.stage)
   const minutes = num(v.minutes)
   return {
-    stage: Number.isFinite(stage) ? Math.min(10, Math.max(1, Math.round(stage))) : DEFAULT_SJ.stage,
+    stage: Number.isFinite(stage) ? Math.min(BASIC_STAGES.length, Math.max(1, Math.round(stage))) : DEFAULT_SJ.stage,
     part: PARTS.includes(v.part as CoursePart) ? (v.part as CoursePart) : DEFAULT_SJ.part,
     cumulative: bool(v.cumulative, DEFAULT_SJ.cumulative),
     shuffle: bool(v.shuffle, DEFAULT_SJ.shuffle),
     tasu: clampTasu(num(v.tasu)),
     minutes: v.minutes === 'all' ? 'all' : (MINUTES_CHOICES as readonly unknown[]).includes(minutes) ? (minutes as Minutes) : DEFAULT_SJ.minutes,
     reveal: v.reveal === 'all' ? 'all' : 'flow',
+    pick: isValidPick(v.pick) ? v.pick : DEFAULT_SJ.pick,
   }
 }
 

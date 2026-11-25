@@ -58,7 +58,7 @@ describe('앱 통합 스모크', () => {
     await act(async () => {
       root.render(<App />)
     })
-    expect(text()).toContain('기본자리연습 1~10단계')
+    expect(text()).toContain('기본자리연습 1~11단계')
     expect(text()).not.toContain('새 단어장')
     clickByText('예전거')
     expect(useApp.getState().track).toBe('legacy')

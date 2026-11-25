@@ -17,6 +17,12 @@ describe('sjPrefs', () => {
       shuffle: true,
     })
     expect(sanitizeSj(null)).toEqual(DEFAULT_SJ)
+    // 11단계(총정리)까지, 약어 고르기 값은 화이트리스트
+    expect(sanitizeSj({ stage: 11 }).stage).toBe(11)
+    expect(sanitizeSj({ stage: 99 }).stage).toBe(11)
+    expect(sanitizeSj({ pick: 'wa' }).pick).toBe('wa')
+    expect(sanitizeSj({ pick: 's3' }).pick).toBe('s3')
+    expect(sanitizeSj({ pick: 'nope' }).pick).toBe('all')
     expect(sanitizeSj('garbage')).toEqual(DEFAULT_SJ)
     expect(sanitizeSj({ minutes: 4 }).minutes).toBe(DEFAULT_SJ.minutes)
     expect(sanitizeSj({ minutes: 'all' }).minutes).toBe('all')
