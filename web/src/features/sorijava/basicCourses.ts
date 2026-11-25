@@ -619,8 +619,8 @@ function buildReview(own: SjItem[], o: BuildOptions, opts: ScoreOpts, rand: () =
     const quotas = groups.map((g) => Math.max(1, Math.ceil(g.length * ratio)))
     const sylOf = (q: number[]) =>
       orders.reduce((n, ord, i) => n + ord.slice(0, q[i]).reduce((m, it) => m + syllableCount(it.t, opts), 0), 0)
-    while (sylOf(quotas) < target && quotas.some((q, i) => q < orders[i].length)) {
-      quotas.forEach((q, i) => (quotas[i] = Math.min(orders[i].length, q + 1)))
+    for (let i = 0; sylOf(quotas) < target && quotas.some((q, k) => q < orders[k].length); i = (i + 1) % quotas.length) {
+      if (quotas[i] < orders[i].length) quotas[i]++ // 묶음을 돌아가며 하나씩 — 목표를 크게 넘기지 않게
     }
     return orders.flatMap((ord, i) => {
       const picked = ord.slice(0, quotas[i])
